@@ -1,0 +1,22 @@
+version: "3.4"
+services:
+  master:
+    hostname: master
+    build: .
+    ports:
+      - 127.0.0.1:22:22
+    networks:
+      - net
+    volumes:
+      - ./src:/home/pi/src
+  slave:
+    hostname: slave
+    build: .
+    networks:
+      - net
+    volumes:
+      - ./src:/home/pi/src
+
+networks:
+  net:
+    driver: bridge
