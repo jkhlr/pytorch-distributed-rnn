@@ -28,7 +28,7 @@ class CoronaVirusPredictor(nn.Module):
         loss_fn = torch.nn.MSELoss(reduction='sum')
         optimiser = torch.optim.Adam(self.parameters(), lr=1e-3)
         train_hist = np.zeros(epochs)
-        for t in range(1, epochs + 1):
+        for t in range(epochs):
             for train_data, train_labels in loader:
                 self.reset_hidden_state()
                 optimiser.zero_grad()
@@ -41,7 +41,7 @@ class CoronaVirusPredictor(nn.Module):
                 optimiser.step()
 
             print(f'Epoch {t} train loss: {loss.item()}')
-            if checkpoint_dir and (t % 10 == 0 or t == epochs):
+            if checkpoint_dir and (t % 10 == 9 or t == epochs - 1):
                 checkpoint = {
                     "epoch": t,
                     "model_state": self.state_dict(),
