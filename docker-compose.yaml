@@ -2,7 +2,7 @@ version: "3.4"
 services:
   master:
     hostname: master
-    build: .
+    image: jkhlr/pytorch-mpi
     ports:
       - 127.0.0.1:22:22
     networks:
@@ -11,7 +11,7 @@ services:
       - ./src:/home/pi/src
   slave:
     hostname: slave
-    build: .
+    image: jkhlr/pytorch-mpi
     networks:
       - net
     volumes:
