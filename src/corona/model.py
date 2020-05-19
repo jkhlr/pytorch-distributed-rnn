@@ -11,7 +11,7 @@ class CoronaVirusPredictor(nn.Module):
         self.n_hidden = n_hidden
         self.seq_len = seq_len
         self.n_layers = n_layers
-        self.lstm = nn.LSTM(input_size=n_features, hidden_size=n_hidden, num_layers=n_layers, dropout=0.5)
+        self.lstm = nn.LSTM(input_size=n_features, hidden_size=n_hidden, num_layers=n_layers, dropout=0.1)
         self.linear = nn.Linear(in_features=n_hidden, out_features=1)
         self.hidden = self.__initial_hidden_state()
 
@@ -25,8 +25,8 @@ class CoronaVirusPredictor(nn.Module):
         return y_pred
 
     def train_model(self, loader: DataLoader, epochs: int, checkpoint_dir=None) -> (nn.Module, np.ndarray):
-        loss_fn = torch.nn.MSELoss(reduction='sum')
-        optimiser = torch.optim.Adam(self.parameters(), lr=1e-3)
+        loss_fn = torch.nn.MSELoss()
+        optimiser = torch.optim.Adam(self.parameters(), lr=1e-6)
         train_hist = np.zeros(epochs)
         for t in range(epochs):
             for train_data, train_labels in loader:
@@ -41,7 +41,7 @@ class CoronaVirusPredictor(nn.Module):
                 optimiser.step()
 
             print(f'Epoch {t} train loss: {loss.item()}')
-            if checkpoint_dir and (t % 10 == 9 or t == epochs - 1):
+            if checkpoint_dir and (t % 10 == 0 or t == epochs - 1):
                 checkpoint = {
                     "epoch": t,
                     "model_state": self.state_dict(),

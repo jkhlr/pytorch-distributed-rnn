@@ -22,9 +22,9 @@ if not MODEL_DIR.exists():
     MODEL_DIR.mkdir()
 
 model = CoronaVirusPredictor(
-    n_features=training_set.num_features, 
+    n_features=training_set.num_features,
     seq_len=training_set.seq_length,
-    n_hidden=512, 
-    n_layers=2
+    n_hidden=128,
+    n_layers=3
 )
 model.train_model(training_generator, epochs=50, checkpoint_dir=MODEL_DIR)
