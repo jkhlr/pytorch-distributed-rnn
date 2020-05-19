@@ -21,17 +21,9 @@ class CoronaDataProcessor:
         self.window_size = window_size
         self.scaler = MinMaxScaler(feature_range=(-1, 1))
 
-    def process_data(self, path):
-        data_dir = Path(path)
-        raw_data_train = pd.read_csv(data_dir/'train.csv', parse_dates=['Date'])
-        X_train, y_train = self.__transform_data(raw_data_train)
-        torch.save(X_train, data_dir/'X_train.pt')
-        torch.save(y_train, data_dir/'y_train.pt')
-
-        # raw_data_test = pd.read_csv(data_dir/'test.csv', parse_dates=['Date'])
-        # X_test, y_test = self.__transform_data(raw_data_test, is_test_data=True)
-        # torch.save(X_test, data_dir/'X_test.pt')
-        # torch.save(y_test, data_dir/'y_test.pt')
+    def process_data(self, csv_path):
+        raw_data = pd.read_csv(csv_path, parse_dates=['Date'])
+        return self.__transform_data(raw_data)
 
     def __transform_data(self, raw_data, is_test_data=False):
         # Drop columns we are not interested in
