@@ -1,3 +1,4 @@
+from pathlib import Path
 import numpy as np
 import torch
 import torch.nn as nn
@@ -23,28 +24,35 @@ class CoronaVirusPredictor(nn.Module):
         y_pred = self.linear(last_time_step)
         return y_pred
 
-    def train_model(self, loader: DataLoader, model_dir: str, epochs: int = 1) -> (nn.Module, np.ndarray):
+    def train_model(self, loader: DataLoader, epochs: int, checkpoint_dir=None) -> (nn.Module, np.ndarray):
         loss_fn = torch.nn.MSELoss(reduction='sum')
         optimiser = torch.optim.Adam(self.parameters(), lr=1e-3)
         train_hist = np.zeros(epochs)
-        for t in range(epochs):
+        for t in range(1, epochs + 1):
             for train_data, train_labels in loader:
                 self.reset_hidden_state()
+                optimiser.zero_grad()
+
                 y_pred = self(train_data)
                 loss = loss_fn(y_pred.float(), train_labels)
+                train_hist[t] = loss.item()
+                loss.backward()
 
-            if t % 10 == 0:
-                print(f'Epoch {t} train loss: {loss.item()}')
-                torch.save({
+                optimiser.step()
+
+            print(f'Epoch {t} train loss: {loss.item()}')
+            if checkpoint_dir and (t % 10 == 0 or t == epochs):
+                checkpoint = {
                     "epoch": t,
                     "model_state": self.state_dict(),
                     "optimizer_state": optimiser.state_dict(),
                     "loss": loss
-                }, f"{model_dir}/checkpoint-epoch-{t}.pt")
-            train_hist[t] = loss.item()
-            optimiser.zero_grad()
-            loss.backward()
-            optimiser.step()
+                }
+                torch.save(
+                    checkpoint,
+                    Path(checkpoint_dir)/f'checkpoint-epoch-{t}.pt'
+                )
+
         return self.eval(), train_hist
 
     def __initial_hidden_state(self) -> (torch.FloatTensor, torch.FloatTensor):
