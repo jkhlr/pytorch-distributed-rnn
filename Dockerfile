@@ -22,7 +22,8 @@ RUN apt-get update && apt-get install -y -q openmpi-bin openmpi-common libopenmp
 WORKDIR /code
 COPY --from=build-wheel /code/pytorch/dist/torch-1.4.0-cp37-cp37m-linux_x86_64.whl .
 RUN pip install torch-1.4.0-cp37-cp37m-linux_x86_64.whl
-RUN pip install torchvision==0.5.0
+COPY requirements.txt .
+RUN pip install -r requirements.txt
 
 RUN groupadd --gid 1000 pi
 RUN useradd --system --create-home --shell /bin/bash --uid 1000 --gid pi --groups sudo pi
