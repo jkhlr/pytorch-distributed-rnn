@@ -1,8 +1,7 @@
-from pathlib import Path
-
 import pandas as pd
 import torch
 from sklearn.preprocessing import MinMaxScaler
+
 
 class CoronaDataProcessor:
     feature_columns = [
