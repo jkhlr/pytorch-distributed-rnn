@@ -7,13 +7,13 @@ class CoronaVirusPredictor(nn.Module):
         self.n_hidden = n_hidden
         self.seq_len = seq_len
         self.n_layers = n_layers
-        self.lstm = nn.LSTM(input_size=n_features, hidden_size=n_hidden, num_layers=n_layers, batch_first=True)
+        self.lstm = nn.LSTM(input_size=n_features, hidden_size=n_hidden, num_layers=n_layers, dropout=0.3, batch_first=True)
         self.linear = nn.Linear(in_features=n_hidden, out_features=1)
 
     def forward(self, sequences):
         batch_size = sequences.size(0)
         h0, c0 = self._initial_hidden_state(batch_size)
-        lstm_out, self.hidden = self.lstm(sequences, (h0, c0))
+        lstm_out, h0 = self.lstm(sequences, (h0, c0))
         y_pred = self.linear(lstm_out[:, -1, :])
         return y_pred
 

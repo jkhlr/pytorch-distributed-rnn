@@ -3,27 +3,27 @@ from torch import save
 from torch.distributed import init_process_group, get_rank, get_world_size
 from torch.nn import MSELoss
 from torch.nn.parallel import DistributedDataParallel
-from torch.optim import Adam
+from torch.optim.rmsprop import RMSprop
 from torch.utils.data import DataLoader
 from torchnet.dataset import SplitDataset
 
 
 class Trainer:
-    loss_fn = MSELoss(reduction='sum')
+    loss_fn = MSELoss(reduction='mean')
 
-    def __init__(self, model, training_set, validation_set=None, checkpoint_dir=None):
+    def __init__(self, model, training_set, batch_size, learning_rate, validation_set=None, checkpoint_dir=None):
         self.model = model
         self.checkpoint_dir = checkpoint_dir
-        self.data_loader = self._get_data_loader(training_set)
+        self.data_loader = self._get_data_loader(training_set, batch_size=batch_size)
         self.validation_data_loader = self._get_data_loader(validation_set, batch_size=1, shuffle=False)
-        self.optimizer = self._get_optimizer(model)
+        self.optimizer = self._get_optimizer(model, learning_rate)
 
     @staticmethod
-    def _get_optimizer(model):
-        return Adam(model.parameters(), lr=1e-3)
+    def _get_optimizer(model, lr):
+        return RMSprop(model.parameters(), lr=lr)
 
     @staticmethod
-    def _get_data_loader(dataset, batch_size=512, shuffle=True):
+    def _get_data_loader(dataset, batch_size=1, shuffle=True):
         if dataset is None:
             return None
         return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, drop_last=True)
@@ -91,7 +91,7 @@ class Trainer:
 
 
 class DDPTrainer(Trainer):
-    def __init__(self, model, training_set, validation_set, checkpoint_dir=None):
+    def __init__(self, model, training_set, batch_size, learning_rate, validation_set=None, checkpoint_dir=None):
         init_process_group('mpi')
         self.rank = get_rank()
         self.world_size = get_world_size()
@@ -99,6 +99,8 @@ class DDPTrainer(Trainer):
             model=DistributedDataParallel(model),
             training_set=self._get_split_training_set(training_set),
             validation_set=self._get_validation_set(validation_set),
+            batch_size=batch_size,
+            learning_rate=learning_rate,
             checkpoint_dir=checkpoint_dir
         )
 
