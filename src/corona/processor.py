@@ -32,7 +32,6 @@ class CoronaDataProcessor:
 
         # Sum target and population for a country_region -> we get 2*114 entries for each country/region
         raw_data = raw_data.groupby(["Date", "Country_Region", "Target"]).sum().reset_index()
-        #print(raw_data.head())
 
         # add current cases and deaths into each category
         raw_data = self.__create_target_value_columns(raw_data)

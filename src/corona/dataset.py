@@ -1,5 +1,6 @@
 import torch
 from torch.utils import data
+from torch.utils.data.dataset import random_split
 
 from processor import CoronaDataProcessor
 
@@ -16,6 +17,11 @@ class CoronaDataset(data.Dataset):
 
     def __len__(self):
         return len(self.X)
+
+    def random_split(self, fraction=0.8):
+        training_examples = int(len(self) * fraction)
+        validation_examples = int(len(self) * (1 - fraction))
+        return random_split(self, [training_examples, validation_examples])
 
     @classmethod
     def load(cls, csv_path):
@@ -38,4 +44,4 @@ class CoronaDataset(data.Dataset):
     def get_processed_data_path(cls, csv_path):
         dataset_name = csv_path.stem
         data_dir = csv_path.absolute().parent
-        return data_dir/f'X_{dataset_name}.pt', data_dir/f'y_{dataset_name}.pt'
+        return data_dir / f'X_{dataset_name}.pt', data_dir / f'y_{dataset_name}.pt'

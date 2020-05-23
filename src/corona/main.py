@@ -10,7 +10,9 @@ SCRIPT_DIR = Path(__file__).absolute().parent
 CHECKPOINT_DIR = SCRIPT_DIR / 'models'
 DATASET_PATH = SCRIPT_DIR / 'data' / 'train.csv'
 
-training_set = CoronaDataset.load(DATASET_PATH)
+dataset = CoronaDataset.load(DATASET_PATH)
+training_set, validation_set = dataset.random_split()
+
 model = CoronaVirusPredictor(
     n_features=training_set.num_features,
     seq_len=training_set.seq_length,
