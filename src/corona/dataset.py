@@ -18,9 +18,9 @@ class CoronaDataset(data.Dataset):
     def __len__(self):
         return len(self.X)
 
-    def random_split(self, fraction=0.8):
+    def random_split(self, fraction=0.95):
         training_examples = int(len(self) * fraction)
-        validation_examples = int(len(self) * (1 - fraction))
+        validation_examples = len(self) - training_examples
         return random_split(self, [training_examples, validation_examples])
 
     @classmethod
