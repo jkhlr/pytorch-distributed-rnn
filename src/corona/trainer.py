@@ -36,10 +36,10 @@ class Trainer:
             training_history.append(loss_avg)
             self._print_loss(epoch, loss_avg)
 
-            if self.validation_data_loader is not None:
-                validation_loss = self._validation_step()
-                validation_history.append(validation_loss)
-                self._print_loss(epoch, validation_loss, type="validation")
+            # if self.validation_data_loader is not None:
+            #     validation_loss = self._validation_step()
+            #     validation_history.append(validation_loss)
+            #     self._print_loss(epoch, validation_loss, type="validation")
 
             if epoch % 10 == 0 or epoch == epochs - 1:
                 self._save_checkpoint(epoch, loss_avg)

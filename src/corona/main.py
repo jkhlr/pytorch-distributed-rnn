@@ -26,7 +26,7 @@ def main():
     args = parser.parse_args()
 
     dataset = CoronaDataset.load(args.dataset_path)
-    training_set, validation_set = dataset.random_split(validation_fraction=args.validation_fraction)
+    #training_set, validation_set = dataset.random_split(validation_fraction=args.validation_fraction)
 
     model = CoronaVirusPredictor(
         n_features=dataset.num_features,
@@ -38,8 +38,8 @@ def main():
 
     trainer = DDPTrainer(
         model=model,
-        training_set=ShuffleDataset(training_set),
-        validation_set=validation_set,
+        training_set=ShuffleDataset(dataset),
+        validation_set=None,
         batch_size=args.batch_size,
         learning_rate=args.learning_rate,
         checkpoint_dir=args.checkpoint_directory
