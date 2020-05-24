@@ -6,6 +6,8 @@ from model import CoronaVirusPredictor
 from torchnet.dataset import ShuffleDataset
 from trainer import DDPTrainer
 
+import logging
+
 SCRIPT_DIR = Path(__file__).absolute().parent
 DEFAULT_CHECKPOINT_DIR = SCRIPT_DIR / 'models'
 DEFAULT_DATASET_PATH = SCRIPT_DIR / 'data' / 'train.csv'
@@ -25,7 +27,7 @@ def main():
 
     args = parser.parse_args()
 
-    print("Start DataLoader")
+    logging.info("Start DataLoader")
     dataset = CoronaDataset.load(args.dataset_path)
     #training_set, validation_set = dataset.random_split(validation_fraction=args.validation_fraction)
 
@@ -38,7 +40,7 @@ def main():
         n_layers=args.stacked_layer
     )
 
-    print("Create trainer")
+    logging.info("Create trainer")
     trainer = DDPTrainer(
         model=model,
         training_set=ShuffleDataset(dataset),
@@ -47,7 +49,7 @@ def main():
         learning_rate=args.learning_rate,
         checkpoint_dir=args.checkpoint_directory
     )
-    print("Train model...")
+    logging.info("Train model...")
     trained_model, history, validation_history = trainer.train(epochs=args.epochs)
 
 

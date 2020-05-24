@@ -7,6 +7,8 @@ from torch.optim.rmsprop import RMSprop
 from torch.utils.data import DataLoader
 from torchnet.dataset import SplitDataset
 
+import logging
+
 
 class Trainer:
     loss_fn = MSELoss(reduction='mean')
@@ -32,7 +34,7 @@ class Trainer:
         training_history = []
         validation_history = []
         for epoch in range(epochs):
-            print(f"Start Epoch {epoch}")
+            logging.info(f"Start Epoch {epoch}")
             loss_avg = self._train_step()
             training_history.append(loss_avg)
             self._print_loss(epoch, loss_avg)
@@ -51,7 +53,7 @@ class Trainer:
         self.model.train()
         loss_sum = 0
         for idx, (train_data, train_labels) in enumerate(self.data_loader):
-            print(f"Batch Nr: {idx}")
+            logging.info(f"Batch Nr: {idx}")
             self.optimizer.zero_grad()
 
             y_pred = self.model(train_data)
@@ -69,7 +71,7 @@ class Trainer:
             for valid_data, valid_label in self.validation_data_loader:
                 output = self.model(valid_data)
                 validation_loss += self.loss_fn(output, valid_label).item()
-                print(f"Model predicted {output.item()}; Correct was {valid_label.item()}")
+                logging.debug(f"Model predicted {output.item()}; Correct was {valid_label.item()}")
 
         validation_loss /= len(self.validation_data_loader.dataset)
         return validation_loss
