@@ -1,3 +1,6 @@
+slots=1
+two pis
+
 time mpirun --host 25.64.79.142,25.65.241.64 python3 pytorch-distributed-rnn/src/corona/main.py --stacked-layer 1 --hidden-units 32 --dropout 0 --batch-size 128 --epochs 1
 INFO:root:Start DataLoader
 INFO:root:Create model
@@ -44,6 +47,7 @@ sys     0m45.235s
 ------------------------------------------------------------------------------------------------
 
 slots=4
+two pis
 
 mpirun --hostfile hostfile python3 pytorch-distributed-rnn/src/corona/main.py --stacked-layer 1 --hidden-units 32 --dropout 0 --batch-size 128 --epochs 1
 INFO:root:Start DataLoader
@@ -129,6 +133,7 @@ sys     2m44.275s
 
 
 slots=2
+two pis
 
 time mpirun --hostfile hostfile python3 pytorch-distributed-rnn/src/corona/main.py --stacked-layer 1 --hidden-units 32 --dropout 0 --batch-size 128 --epochs 1
 
@@ -178,12 +183,10 @@ user    1m55.618s
 
 ------------------------------------------------------------------------------
 
-slots 4
+slots 2
 single machine
 
-time mpirun --hostfile hostfile python3 pytorch-distribut
-ed-rnn/src/corona/main.py --stacked-layer 1 --hidden-units 32 --dropout 0 --
-batch-size 128 --epochs 1
+time mpirun --hostfile hostfile python3 pytorch-distributed-rnn/src/corona/main.py --stacked-layer 1 --hidden-units 32 --dropout 0 --batch-size 128 --epochs 1
 INFO:root:Start DataLoader
 INFO:root:Create model
 INFO:root:Start DataLoader
@@ -225,12 +228,53 @@ real    0m2.515s
 user    0m4.298s
 sys     0m0.428s
 
+---------------------------------------------------------
+
+one slot
+single machine
+
+time mpirun --hostfile hostfile python3 pytorch-distributed-rnn/src/corona/main.py --stacked-layer 1 --hidden-units 32 --dropout 0 --batch-size 128 --epochs 1
+INFO:root:Start DataLoader
+INFO:root:Create model
+INFO:root:Create trainer
+INFO:root:Train model...
+INFO:root:0 Start Epoch 0
+INFO:root:0 Batch Nr: 0
+INFO:root:0 Batch Nr: 1
+INFO:root:0 Batch Nr: 2
+INFO:root:0 Batch Nr: 3
+INFO:root:0 Batch Nr: 4
+INFO:root:0 Batch Nr: 5
+INFO:root:0 Batch Nr: 6
+INFO:root:0 Batch Nr: 7
+INFO:root:0 Batch Nr: 8
+INFO:root:0 Batch Nr: 9
+INFO:root:0 Batch Nr: 10
+INFO:root:0 Batch Nr: 11
+INFO:root:0 Batch Nr: 12
+INFO:root:0 Batch Nr: 13
+INFO:root:0 Batch Nr: 14
+INFO:root:0 Batch Nr: 15
+INFO:root:0 Batch Nr: 16
+INFO:root:0 Batch Nr: 17
+INFO:root:0 Batch Nr: 18
+INFO:root:0 Batch Nr: 19
+INFO:root:0 Batch Nr: 20
+INFO:root:0 Batch Nr: 21
+INFO:root:0 Batch Nr: 22
+INFO:root:0 Batch Nr: 23
+0: Epoch 0 train loss: 159814.15876197815
+
+real    0m2.963s
+user    0m2.562s
+sys     0m0.349s
+
 
 ----------------------------------------------------------
 
 
-time python3 pytorch-distributed-rnn/src/corona/main.py -
--stacked-layer 1 --hidden-units 32 --dropout 0 --batch-size 128 --epochs 1   INFO:root:Start DataLoader
+time python3 pytorch-distributed-rnn/src/corona/main.py --stacked-layer 1 --hidden-units 32 --dropout 0 --batch-size 128 --epochs 1   
+INFO:root:Start DataLoader
 INFO:root:Create model
 INFO:root:Create trainer
 INFO:root:Train model...
