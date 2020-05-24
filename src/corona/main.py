@@ -24,14 +24,17 @@ def main():
     parser.add_argument("--batch-size", default=32, type=int)
     parser.add_argument("--learning-rate", default=1e-6, type=float)
     parser.add_argument("--dropout", default=0.3, type=float)
+    parser.add_argument("--log", default="INFO")
 
     args = parser.parse_args()
+
+    logging.getLogger().setLevel(args.log)
 
     logging.info("Start DataLoader")
     dataset = CoronaDataset.load(args.dataset_path)
     #training_set, validation_set = dataset.random_split(validation_fraction=args.validation_fraction)
 
-    print("Create model")
+    logging.info("Create model")
     model = CoronaVirusPredictor(
         n_features=dataset.num_features,
         seq_len=dataset.seq_length,

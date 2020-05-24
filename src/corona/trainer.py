@@ -34,7 +34,7 @@ class Trainer:
         training_history = []
         validation_history = []
         for epoch in range(epochs):
-            logging.info(f"Start Epoch {epoch}")
+            logging.info(f"{self.rank} Start Epoch {epoch}")
             loss_avg = self._train_step()
             training_history.append(loss_avg)
             self._print_loss(epoch, loss_avg)
@@ -53,7 +53,7 @@ class Trainer:
         self.model.train()
         loss_sum = 0
         for idx, (train_data, train_labels) in enumerate(self.data_loader):
-            logging.info(f"Batch Nr: {idx}")
+            logging.info(f"{self.rank} Batch Nr: {idx}")
             self.optimizer.zero_grad()
 
             y_pred = self.model(train_data)
