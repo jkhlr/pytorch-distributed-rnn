@@ -23,4 +23,4 @@ trainer = DDPTrainer(
     training_set=ShuffleDataset(training_set),
     checkpoint_dir=CHECKPOINT_DIR
 )
-trained_model, history = trainer.train(epochs=50)
+trained_model, history = trainer.train(epochs=1)

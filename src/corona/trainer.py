@@ -23,7 +23,7 @@ class Trainer:
 
     @staticmethod
     def _get_data_loader(training_set):
-        return DataLoader(training_set, batch_size=10, shuffle=True)
+        return DataLoader(training_set, batch_size=100, shuffle=True)
 
     def train(self, epochs):
         training_history = []

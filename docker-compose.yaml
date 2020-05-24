@@ -9,6 +9,9 @@ services:
       - net
     volumes:
       - ./src:/home/pi/src
+      - ./hostfile:/home/pi/hostfile
+    cap_add:
+      - SYS_PTRACE
   slave:
     hostname: slave
     image: jkhlr/pytorch-mpi
@@ -16,6 +19,8 @@ services:
       - net
     volumes:
       - ./src:/home/pi/src
+    cap_add:
+      - SYS_PTRACE
 
 networks:
   net:
