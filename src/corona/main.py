@@ -25,9 +25,11 @@ def main():
 
     args = parser.parse_args()
 
+    print("Start DataLoader")
     dataset = CoronaDataset.load(args.dataset_path)
     #training_set, validation_set = dataset.random_split(validation_fraction=args.validation_fraction)
 
+    print("Create model")
     model = CoronaVirusPredictor(
         n_features=dataset.num_features,
         seq_len=dataset.seq_length,
@@ -36,6 +38,7 @@ def main():
         n_layers=args.stacked_layer
     )
 
+    print("Create trainer")
     trainer = DDPTrainer(
         model=model,
         training_set=ShuffleDataset(dataset),
@@ -44,6 +47,7 @@ def main():
         learning_rate=args.learning_rate,
         checkpoint_dir=args.checkpoint_directory
     )
+    print("Train model...")
     trained_model, history, validation_history = trainer.train(epochs=args.epochs)
 
 
