@@ -2,7 +2,6 @@ import torch
 from torch.utils import data
 from torch.utils.data.dataset import random_split
 
-from processor import CoronaDataProcessor
 
 
 class CoronaDataset(data.Dataset):
@@ -18,9 +17,9 @@ class CoronaDataset(data.Dataset):
     def __len__(self):
         return len(self.X)
 
-    def random_split(self, fraction=0.95):
-        training_examples = int(len(self) * fraction)
-        validation_examples = len(self) - training_examples
+    def random_split(self, validation_fraction=0.05):
+        validation_examples = int(len(self) * validation_fraction)
+        training_examples = len(self) - validation_examples
         return random_split(self, [training_examples, validation_examples])
 
     @classmethod
@@ -29,6 +28,9 @@ class CoronaDataset(data.Dataset):
         if cls.processed_data_exists(csv_path):
             return cls(X=torch.load(feature_path), y=torch.load(label_path))
 
+        # only import if it is necessary
+        # this allows us to use provide the data in enviornments where we cannot install sklearn and pandas
+        from processor import CoronaDataProcessor
         processor = CoronaDataProcessor(window_size=7)
         X, y = processor.process_data(csv_path)
         torch.save(X, feature_path)

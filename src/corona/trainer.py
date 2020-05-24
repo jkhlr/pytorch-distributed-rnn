@@ -26,22 +26,25 @@ class Trainer:
     def _get_data_loader(dataset, batch_size=1, shuffle=True):
         if dataset is None:
             return None
-        return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, drop_last=True)
+        return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
 
     def train(self, epochs):
         training_history = []
+        validation_history = []
         for epoch in range(epochs):
             loss_avg = self._train_step()
+            training_history.append(loss_avg)
             self._print_loss(epoch, loss_avg)
 
             if self.validation_data_loader is not None:
                 validation_loss = self._validation_step()
+                validation_history.append(validation_loss)
                 self._print_loss(epoch, validation_loss, type="validation")
 
             if epoch % 10 == 0 or epoch == epochs - 1:
                 self._save_checkpoint(epoch, loss_avg)
 
-        return self.model.eval(), training_history
+        return self.model.eval(), training_history, validation_history
 
     def _train_step(self):
         self.model.train()

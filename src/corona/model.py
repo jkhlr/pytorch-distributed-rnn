@@ -1,13 +1,15 @@
 import torch
 import torch.nn as nn
 
+
 class CoronaVirusPredictor(nn.Module):
-    def __init__(self, n_features: int, n_hidden: int, seq_len: int, n_layers):
+    def __init__(self, n_features: int, n_hidden: int, seq_len: int, dropout=0.2, n_layers=1):
         super().__init__()
         self.n_hidden = n_hidden
         self.seq_len = seq_len
         self.n_layers = n_layers
-        self.lstm = nn.LSTM(input_size=n_features, hidden_size=n_hidden, num_layers=n_layers, dropout=0.3, batch_first=True)
+        self.lstm = nn.LSTM(input_size=n_features, hidden_size=n_hidden, num_layers=n_layers, dropout=dropout,
+                            batch_first=True)
         self.linear = nn.Linear(in_features=n_hidden, out_features=1)
 
     def forward(self, sequences):
