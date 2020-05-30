@@ -6,15 +6,17 @@ from sklearn.preprocessing import MinMaxScaler
 class CoronaDataProcessor:
     feature_columns = [
         "Population",
-        "DaysSince0",
-        "ConfirmedCases",
-        "Fatalities",
+        "DaysSince0",  # Day since the first infection in the country
+        "ConfirmedCases",  # Confirmed cases on this day
+        "Fatalities",  # Fatalities on this day
         "DaysSinceFirstDeath",
         "DaysSinceFirstCase",
-        "CumulativeConfirmedCases",
-        "CumulativeFatalities"
+        "CumulativeConfirmedCases",  # Overall number of confirmed cases in the country
+        "CumulativeFatalities",  # Overall number of fatalities in the country
+        "CasesChange",  # exponential weighted average of the % change in overall cases
+        "FatalitiesChange"  # exponential weighted average of the % change in overall fatalities
     ]
-    label_column = "ConfirmedCases"
+    label_column = "CumulativeConfirmedCases"
 
     def __init__(self, window_size):
         self.window_size = window_size
@@ -42,6 +44,9 @@ class CoronaDataProcessor:
         # create cum sums
         raw_data = self.__create_cum_targets(raw_data)
 
+        # add percent change
+        raw_data = self.__create_pct_ewm(raw_data)
+
         # create additional day information
         raw_data = self.__add_day_features(raw_data)
 
@@ -54,6 +59,16 @@ class CoronaDataProcessor:
         X_train, y_train = self.__create_windows(X, Y, start_indices, end_indices)
         y_train = y_train.view(-1, 1)
         return X_train, y_train
+
+    def __create_pct_ewm(self, raw_data):
+        raw_data[["CasesChange", "FatalitiesChange"]] = (raw_data.groupby("Country_Region")
+                                                         [["CumulativeConfirmedCases", "CumulativeFatalities"]]
+                                                         .pct_change() * 100)
+        raw_data[["CasesChange", "FatalitiesChange"]] = raw_data[["CasesChange", "FatalitiesChange"]].fillna(0)
+        raw_data[["CasesChange", "FatalitiesChange"]] = (raw_data.groupby("Country_Region")
+                                                         [["CasesChange", "FatalitiesChange"]]
+                                                         .transform(lambda x: x.ewm(halflife=15).mean()))
+        return raw_data
 
     def __create_cum_targets(self, raw_data):
         raw_data[["CumulativeConfirmedCases", "CumulativeFatalities"]] = raw_data.groupby("Country_Region")[
