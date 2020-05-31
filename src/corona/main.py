@@ -32,22 +32,21 @@ def main():
 
     logging.info("Start DataLoader")
     dataset = CoronaDataset.load(args.dataset_path)
-    #training_set, validation_set = dataset.random_split(validation_fraction=args.validation_fraction)
+    training_set, validation_set = dataset.random_split(validation_fraction=args.validation_fraction)
 
     logging.info("Create model")
     model = CoronaVirusPredictor(
-        n_features=dataset.num_features,
-        seq_len=dataset.seq_length,
-        n_hidden=args.hidden_units,
-        dropout=args.dropout,
-        n_layers=args.stacked_layer
+        input_dim=dataset.num_features,
+        hidden_dim=args.hidden_units,
+        layer_dim=args.stacked_layer,
+        output_dim=1,
     )
 
     logging.info("Create trainer")
     trainer = DDPTrainer(
         model=model,
-        training_set=ShuffleDataset(dataset),
-        validation_set=None,
+        training_set=ShuffleDataset(training_set),
+        validation_set=validation_set,
         batch_size=args.batch_size,
         learning_rate=args.learning_rate,
         checkpoint_dir=args.checkpoint_directory

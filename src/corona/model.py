@@ -3,24 +3,21 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class CoronaVirusPredictor(nn.Module):
-    def __init__(self, n_features: int, n_hidden: int, seq_len: int, dropout=0.2, n_layers=1):
+    def __init__(self, input_dim, hidden_dim, layer_dim, output_dim):
         super(CoronaVirusPredictor, self).__init__()
-        self.n_hidden = n_hidden
-        self.seq_len = seq_len
-        self.n_layers = n_layers
-        self.lstm = nn.LSTM(input_size=n_features, hidden_size=n_hidden, num_layers=n_layers, dropout=dropout,
-                            batch_first=True)
-        self.linear = nn.Linear(in_features=n_hidden, out_features=1)
+        self.hidden_dim = hidden_dim
+        self.layer_dim = layer_dim
+        self.lstm = nn.LSTM(input_dim, hidden_dim, layer_dim, batch_first=True)
+        self.fc = nn.Linear(hidden_dim, output_dim)
 
-    def forward(self, sequences):
-        batch_size = sequences.size(0)
-        h0, c0 = self._initial_hidden_state(batch_size)
-        lstm_out, _ = self.lstm(sequences, (h0, c0))
-        last_output = lstm_out[:, -1, :]
-        last_output = F.leaky_relu(last_output)
-        y_pred = self.linear(last_output)
-        return y_pred
-
-    def _initial_hidden_state(self, batch_size) -> (torch.FloatTensor, torch.FloatTensor):
-        return (torch.zeros(self.n_layers, batch_size, self.n_hidden),
-                torch.zeros(self.n_layers, batch_size, self.n_hidden))
+    def forward(self, x):
+        batch_size = x.size(0)
+        # Initialize hidden state with zeros
+        h0 = torch.zeros(self.layer_dim, batch_size, self.hidden_dim).requires_grad_()
+        # Initialize cell state
+        c0 = torch.zeros(self.layer_dim, batch_size, self.hidden_dim).requires_grad_()
+        out, (_, _) = self.lstm(x, (h0.detach(), c0.detach()))
+        # out = F.relu(out)
+        # out[:, -1, :] selects the last time step
+        out = self.fc(out[:, -1, :])
+        return out

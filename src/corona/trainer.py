@@ -11,7 +11,7 @@ import logging
 
 
 class Trainer:
-    loss_fn = MSELoss(reduction='mean')
+    loss_fn = MSELoss()
 
     def __init__(self, model, training_set, batch_size, learning_rate, validation_set=None, checkpoint_dir=None):
         self.model = model
@@ -39,10 +39,10 @@ class Trainer:
             training_history.append(loss_avg)
             self._print_loss(epoch, loss_avg)
 
-            # if self.validation_data_loader is not None:
-            #     validation_loss = self._validation_step()
-            #     validation_history.append(validation_loss)
-            #     self._print_loss(epoch, validation_loss, type="validation")
+            if self.validation_data_loader is not None:
+                validation_loss = self._validation_step()
+                validation_history.append(validation_loss)
+                self._print_loss(epoch, validation_loss, type="validation")
 
             if epoch % 10 == 0 or epoch == epochs - 1:
                 self._save_checkpoint(epoch, loss_avg)
@@ -54,6 +54,7 @@ class Trainer:
         loss_sum = 0
         for idx, (train_data, train_labels) in enumerate(self.data_loader):
             logging.info(f"{self.rank} Batch Nr: {idx}")
+            train_data = train_data.requires_grad_()
             self.optimizer.zero_grad()
             y_pred = self.model(train_data)
             loss = self.loss_fn(y_pred.float(), train_labels)
@@ -121,7 +122,7 @@ class DDPTrainer(Trainer):
         return SplitDataset(training_set, partitions, str(self.rank))
 
     def _get_validation_set(self, validation_set):
-        if self.rank == 0:
+        if self.rank is None or self.rank == 0:
             return validation_set
         else:
             return None

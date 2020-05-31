@@ -20,7 +20,8 @@ class CoronaDataProcessor:
 
     def __init__(self, window_size):
         self.window_size = window_size
-        self.scaler = MinMaxScaler(feature_range=(-1, 1))
+        self.feature_scaler = MinMaxScaler(feature_range=(-1, 1))
+        self.label_scaler = MinMaxScaler(feature_range=(-1, 1))
 
     def process_data(self, csv_path):
         raw_data = pd.read_csv(csv_path, parse_dates=['Date'])
@@ -55,6 +56,7 @@ class CoronaDataProcessor:
         X = raw_data[self.feature_columns].to_numpy()
         Y = raw_data[self.label_column].to_numpy()
         X = self.__scale_features(X, is_test_data)
+        Y = self.label_scaler.fit_transform(Y.reshape(-1, 1))  # reshape required for scaler
 
         X_train, y_train = self.__create_windows(X, Y, start_indices, end_indices)
         y_train = y_train.view(-1, 1)
@@ -95,8 +97,8 @@ class CoronaDataProcessor:
 
     def __scale_features(self, X, is_test_data):
         if is_test_data:
-            return self.scaler.transform(X)
-        return self.scaler.fit_transform(X)
+            return self.feature_scaler.transform(X)
+        return self.feature_scaler.fit_transform(X)
 
     def __create_target_value_columns(self, raw_data):
         column_names = ["ConfirmedCases", "Fatalities"]
