@@ -110,7 +110,7 @@ class CoronaDataProcessor:
         X = []
         Y = []
         for start_index, end_index in zip(start_indices, end_indices):
-            for i in range(start_index, end_index, self.window_size):
+            for i in range(start_index, end_index):
                 if i + self.window_size > end_index:
                     continue
                 train_seq = features[i:i + self.window_size]
