@@ -3,7 +3,6 @@ from torch.utils import data
 from torch.utils.data.dataset import random_split
 
 
-
 class CoronaDataset(data.Dataset):
     def __init__(self, X, y):
         self.X = X
@@ -29,7 +28,7 @@ class CoronaDataset(data.Dataset):
             return cls(X=torch.load(feature_path), y=torch.load(label_path))
 
         # only import if it is necessary
-        # this allows us to use provide the data in enviornments where we cannot install sklearn and pandas
+        # this allows us to use provide the data in environments where we cannot install sklearn and pandas
         from processor import CoronaDataProcessor
         processor = CoronaDataProcessor(window_size=7)
         X, y = processor.process_data(csv_path)

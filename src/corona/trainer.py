@@ -3,7 +3,7 @@ from torch import save
 from torch.distributed import init_process_group, get_rank, get_world_size
 from torch.nn import MSELoss
 from torch.nn.parallel import DistributedDataParallel
-from torch.optim.rmsprop import RMSprop
+from torch.optim import Adam
 from torch.utils.data import DataLoader
 from torchnet.dataset import SplitDataset
 
@@ -22,7 +22,7 @@ class Trainer:
 
     @staticmethod
     def _get_optimizer(model, lr):
-        return RMSprop(model.parameters(), lr=lr)
+        return Adam(model.parameters(), lr=lr)
 
     @staticmethod
     def _get_data_loader(dataset, batch_size=1, shuffle=True):
@@ -55,7 +55,6 @@ class Trainer:
         for idx, (train_data, train_labels) in enumerate(self.data_loader):
             logging.info(f"{self.rank} Batch Nr: {idx}")
             self.optimizer.zero_grad()
-
             y_pred = self.model(train_data)
             loss = self.loss_fn(y_pred.float(), train_labels)
             loss_sum += loss.item()

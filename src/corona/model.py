@@ -1,10 +1,10 @@
 import torch
 import torch.nn as nn
-
+import torch.nn.functional as F
 
 class CoronaVirusPredictor(nn.Module):
     def __init__(self, n_features: int, n_hidden: int, seq_len: int, dropout=0.2, n_layers=1):
-        super().__init__()
+        super(CoronaVirusPredictor, self).__init__()
         self.n_hidden = n_hidden
         self.seq_len = seq_len
         self.n_layers = n_layers
@@ -15,8 +15,10 @@ class CoronaVirusPredictor(nn.Module):
     def forward(self, sequences):
         batch_size = sequences.size(0)
         h0, c0 = self._initial_hidden_state(batch_size)
-        lstm_out, h0 = self.lstm(sequences, (h0, c0))
-        y_pred = self.linear(lstm_out[:, -1, :])
+        lstm_out, _ = self.lstm(sequences, (h0, c0))
+        last_output = lstm_out[:, -1, :]
+        last_output = F.leaky_relu(last_output)
+        y_pred = self.linear(last_output)
         return y_pred
 
     def _initial_hidden_state(self, batch_size) -> (torch.FloatTensor, torch.FloatTensor):

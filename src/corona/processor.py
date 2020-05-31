@@ -67,7 +67,7 @@ class CoronaDataProcessor:
         raw_data[["CasesChange", "FatalitiesChange"]] = raw_data[["CasesChange", "FatalitiesChange"]].fillna(0)
         raw_data[["CasesChange", "FatalitiesChange"]] = (raw_data.groupby("Country_Region")
                                                          [["CasesChange", "FatalitiesChange"]]
-                                                         .transform(lambda x: x.ewm(halflife=15).mean()))
+                                                         .transform(lambda x: x.ewm(halflife=5).mean()))
         return raw_data
 
     def __create_cum_targets(self, raw_data):
