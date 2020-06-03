@@ -1,26 +1,58 @@
-from os.path import dirname, realpath
+import argparse
 from pathlib import Path
-from torchnet.dataset import ShuffleDataset
 
 from dataset import CoronaDataset
 from model import CoronaVirusPredictor
 from trainer import DDPTrainer
 
+import logging
+
 SCRIPT_DIR = Path(__file__).absolute().parent
-CHECKPOINT_DIR = SCRIPT_DIR / 'models'
-DATASET_PATH = SCRIPT_DIR / 'data' / 'train.csv'
+DEFAULT_CHECKPOINT_DIR = SCRIPT_DIR / 'models'
+DEFAULT_DATASET_PATH = SCRIPT_DIR / 'data' / 'train.csv'
 
-training_set = CoronaDataset.load(DATASET_PATH)
-model = CoronaVirusPredictor(
-    n_features=training_set.num_features,
-    seq_len=training_set.seq_length,
-    n_hidden=128,
-    n_layers=3
-)
 
-trainer = DDPTrainer(
-    model=model,
-    training_set=ShuffleDataset(training_set),
-    checkpoint_dir=CHECKPOINT_DIR
-)
-trained_model, history = trainer.train(epochs=50)
+def main():
+    parser = argparse.ArgumentParser(description="SusML JKTM")
+    parser.add_argument("--checkpoint-directory", default=DEFAULT_CHECKPOINT_DIR, type=Path)
+    parser.add_argument("--dataset-path", default=DEFAULT_DATASET_PATH, type=Path)
+    parser.add_argument("--stacked-layer", default=2, type=int)
+    parser.add_argument("--hidden-units", default=256, type=int)
+    parser.add_argument("--epochs", default=100, type=int)
+    parser.add_argument("--validation-fraction", default=0.01, type=float)
+    parser.add_argument("--batch-size", default=256, type=int)
+    parser.add_argument("--learning-rate", default=1e-3, type=float)
+    parser.add_argument("--dropout", default=0.1, type=float)
+    parser.add_argument("--log", default="INFO")
+
+    args = parser.parse_args()
+
+    logging.getLogger().setLevel(args.log)
+
+    logging.info("Start DataLoader")
+    dataset = CoronaDataset.load(args.dataset_path)
+    training_set, validation_set = dataset.random_split(validation_fraction=args.validation_fraction)
+
+    logging.info("Create model")
+    model = CoronaVirusPredictor(
+        input_dim=dataset.num_features,
+        hidden_dim=args.hidden_units,
+        layer_dim=args.stacked_layer,
+        output_dim=1,
+    )
+
+    logging.info("Create trainer")
+    trainer = DDPTrainer(
+        model=model,
+        training_set=training_set,
+        validation_set=validation_set,
+        batch_size=args.batch_size,
+        learning_rate=args.learning_rate,
+        checkpoint_dir=args.checkpoint_directory
+    )
+    logging.info("Train model...")
+    trained_model, history, validation_history = trainer.train(epochs=args.epochs)
+
+
+if __name__ == '__main__':
+    main()
