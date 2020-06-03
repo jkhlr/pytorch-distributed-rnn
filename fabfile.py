@@ -6,65 +6,44 @@ from fabric import task
 from patchwork.transfers import rsync
 
 RESULT_FILE = 'results.json'
-SLAVES = ['192.168.2.15']
-MASTER = '192.168.2.11'
+SLAVES = [f"192.168.2.{x}" for x in range(2, 13)]
+MASTER = '192.168.2.15'
 TRAIN_SCRIPT = '~/susml/jakob_torben/src/corona/main.py'
 
 DEBUG_RUN = {
-    'hosts': 2,
+    'hosts': 1,
     'slots': 1,
     'parameters': {
         '--stacked-layer': 1,
         '--hidden-units': 32,
         '--dropout': 0,
         '--batch-size': 128,
-        '--epochs': 1
+        '--epochs': 2,
+        '--num-threads': 4
     }
 }
 
 TRAIN_RUNS = [
     {
-        'hosts': 1,
+        'hosts': 12,
         'slots': 1,
         'parameters': {
             '--stacked-layer': 1,
             '--hidden-units': 32,
             '--dropout': 0,
             '--batch-size': 128,
-            '--epochs': 1
+            '--epochs': 5
         }
     },
     {
-        'hosts': 1,
-        'slots': 2,
+        'hosts': 12,
+        'slots': 4,
         'parameters': {
             '--stacked-layer': 1,
             '--hidden-units': 32,
             '--dropout': 0,
             '--batch-size': 128,
-            '--epochs': 1
-        }
-    },
-    {
-        'hosts': 2,
-        'slots': 1,
-        'parameters': {
-            '--stacked-layer': 1,
-            '--hidden-units': 32,
-            '--dropout': 0,
-            '--batch-size': 128,
-            '--epochs': 1
-        }
-    },
-    {
-        'hosts': 2,
-        'slots': 2,
-        'parameters': {
-            '--stacked-layer': 1,
-            '--hidden-units': 32,
-            '--dropout': 0,
-            '--batch-size': 128,
-            '--epochs': 1
+            '--epochs': 5
         }
     }
 ]
@@ -100,8 +79,8 @@ def run_training_configuration(connection, parameters, num_hosts, slots_per_host
         for name, value
         in parameters.items()
     )
-    source_cmd = "source ~/susml/jakob_torben/bin/activate"
-    command = f'{source_cmd} && mpirun --host {host_string} bash -c \'{source_cmd} && python {TRAIN_SCRIPT} {parameter_string}\''
+    source_cmd = "export MKL_NUM_THREADS=4 OMP_NUM_THREADS=4 && source ~/susml/jakob_torben/bin/activate"
+    command = f'{source_cmd} && mpirun -n {num_hosts * slots_per_host}  --host {host_string} bash -c \'{source_cmd} && python {TRAIN_SCRIPT} {parameter_string}\''
     stdout, stderr, seconds = measure_time(connection, command)
     return command, stdout, stderr, seconds
 
