@@ -1,7 +1,9 @@
 import json
 import time
+from pathlib import Path
 
 from fabric import task
+from patchwork.transfers import rsync
 
 RESULT_FILE = 'results.json'
 SLAVES = ['slave']
@@ -83,6 +85,14 @@ def prepare_connections(c):
         raise ValueError("Can't connect to slaves")
 
 
+@task
+def copy_files(c):
+    path = Path("./src/corona/")
+    remote_path = Path("~/src/corona")
+    rsync(c, path, remote_path, delete=True)
+    c.run(f"ls -a")
+
+
 def run_training_configuration(connection, parameters, num_hosts, slots_per_host):
     host_string = ','.join(([MASTER] + SLAVES)[:num_hosts] * slots_per_host)
     parameter_string = ' '.join(
@@ -90,7 +100,7 @@ def run_training_configuration(connection, parameters, num_hosts, slots_per_host
         for name, value
         in parameters.items()
     )
-    command = f'mpirun --host {host_string} python {TRAIN_SCRIPT} {parameter_string}'
+    command = f'source ~/susml/jakob_torben/bin/activate && mpirun --host {host_string} python {TRAIN_SCRIPT} {parameter_string}'
     stdout, stderr, seconds = measure_time(connection, command)
     return command, stdout, stderr, seconds
 
@@ -121,6 +131,7 @@ def run_training(c):
         })
     with open(RESULT_FILE, 'w') as f:
         json.dump({'results': results}, f)
+
 
 @task
 def run_debug_training(c):
