@@ -6,15 +6,15 @@ from sklearn.preprocessing import MinMaxScaler
 class CoronaDataProcessor:
     feature_columns = [
         "Population",
-        "DaysSince0",  # Day since the first infection in the country
+        # "DaysSince0",  # Day since the first infection in the country
         "ConfirmedCases",  # Confirmed cases on this day
-        "Fatalities",  # Fatalities on this day
-        "DaysSinceFirstDeath",
-        "DaysSinceFirstCase",
-        "CumulativeConfirmedCases",  # Overall number of confirmed cases in the country
-        "CumulativeFatalities",  # Overall number of fatalities in the country
-        "CasesChange",  # exponential weighted average of the % change in overall cases
-        "FatalitiesChange"  # exponential weighted average of the % change in overall fatalities
+        # "Fatalities",  # Fatalities on this day
+        # "DaysSinceFirstDeath",
+        # "DaysSinceFirstCase",
+         "CumulativeConfirmedCases",  # Overall number of confirmed cases in the country
+        # "CumulativeFatalities",  # Overall number of fatalities in the country
+        # "CasesChange",  # exponential weighted average of the % change in overall cases
+        # "FatalitiesChange"  # exponential weighted average of the % change in overall fatalities
     ]
     label_column = "CumulativeConfirmedCases"
 

@@ -4,8 +4,7 @@ from torch.distributed import init_process_group, get_rank, get_world_size
 from torch.nn import MSELoss
 from torch.nn.parallel import DistributedDataParallel
 from torch.optim import Adam
-from torch.utils.data import DataLoader
-from torchnet.dataset import SplitDataset
+from torch.utils.data import DataLoader, DistributedSampler
 
 import logging
 
@@ -13,10 +12,11 @@ import logging
 class Trainer:
     loss_fn = MSELoss()
 
-    def __init__(self, model, training_set, batch_size, learning_rate, validation_set=None, checkpoint_dir=None):
+    def __init__(self, model, training_set, batch_size, learning_rate, validation_set=None, checkpoint_dir=None, sampler=None):
         self.model = model
         self.checkpoint_dir = checkpoint_dir
-        self.data_loader = self._get_data_loader(training_set, batch_size=batch_size)
+        self.sampler=sampler
+        self.data_loader = self._get_data_loader(training_set, batch_size=batch_size, sampler=sampler)
         self.validation_data_loader = self._get_data_loader(validation_set, batch_size=1, shuffle=False)
         self.optimizer = self._get_optimizer(model, learning_rate)
 
@@ -25,15 +25,17 @@ class Trainer:
         return Adam(model.parameters(), lr=lr)
 
     @staticmethod
-    def _get_data_loader(dataset, batch_size=1, shuffle=True):
+    def _get_data_loader(dataset, batch_size=1, shuffle=True, sampler=None):
         if dataset is None:
             return None
-        return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+        return DataLoader(dataset, batch_size=batch_size, shuffle=(sampler is None and shuffle), sampler=sampler)
 
     def train(self, epochs):
         training_history = []
         validation_history = []
         for epoch in range(epochs):
+            if self.sampler is not None:
+                self.sampler.set_epoch(epoch)
             logging.info(f"{self.rank} Start Epoch {epoch}")
             loss_avg = self._train_step()
             training_history.append(loss_avg)
@@ -53,7 +55,7 @@ class Trainer:
         self.model.train()
         loss_sum = 0
         for idx, (train_data, train_labels) in enumerate(self.data_loader):
-            logging.info(f"{self.rank} Batch Nr: {idx}")
+            logging.debug(f"{self.rank} Batch Nr: {idx}")
             train_data = train_data.requires_grad_()
             self.optimizer.zero_grad()
             y_pred = self.model(train_data)
@@ -80,7 +82,7 @@ class Trainer:
         self.model.reset_hidden_state()
 
     def _print_loss(self, epoch, loss, type="train"):
-        print(f'Epoch {epoch} {type} loss: {loss}')
+        logging.info(f'Epoch {epoch} {type} loss: {loss}')
 
     def _save_checkpoint(self, epoch, loss):
         if self.checkpoint_dir is None:
@@ -104,22 +106,13 @@ class DDPTrainer(Trainer):
         self.world_size = get_world_size()
         super().__init__(
             model=DistributedDataParallel(model),
-            training_set=self._get_split_training_set(training_set),
+            training_set=training_set,
             validation_set=self._get_validation_set(validation_set),
             batch_size=batch_size,
             learning_rate=learning_rate,
-            checkpoint_dir=checkpoint_dir
+            checkpoint_dir=checkpoint_dir,
+            sampler=DistributedSampler(training_set, num_replicas=self.world_size, rank=self.rank, shuffle=True)
         )
-
-    def _get_split_training_set(self, training_set):
-        if self.world_size == 1:
-            return training_set
-
-        partitions = {
-            str(i): 1 / self.world_size
-            for i in range(self.world_size)
-        }
-        return SplitDataset(training_set, partitions, str(self.rank))
 
     def _get_validation_set(self, validation_set):
         if self.rank is None or self.rank == 0:
@@ -131,7 +124,7 @@ class DDPTrainer(Trainer):
         self.model.module.reset_hidden_state()
 
     def _print_loss(self, epoch, loss, type="train"):
-        print(f'{self.rank}: Epoch {epoch} {type} loss: {loss}')
+        logging.info(f'{self.rank}: Epoch {epoch} {type} loss: {loss}')
 
     def _save_checkpoint(self, epoch, loss):
         if self.rank != 0:
