@@ -6,9 +6,9 @@ from fabric import task
 from patchwork.transfers import rsync
 
 RESULT_FILE = 'results.json'
-SLAVES = ['slave']
-MASTER = 'master'
-TRAIN_SCRIPT = '~/src/corona/main.py'
+SLAVES = ['192.168.2.15']
+MASTER = '192.168.2.11'
+TRAIN_SCRIPT = '~/susml/jakob_torben/src/corona/main.py'
 
 DEBUG_RUN = {
     'hosts': 2,
@@ -88,9 +88,9 @@ def prepare_connections(c):
 @task
 def copy_files(c):
     path = Path("./src/corona/")
-    remote_path = Path("~/src/corona")
+    remote_path = Path("~/susml/jakob_torben/src/")
+    c.run(f'mkdir -p {remote_path}')
     rsync(c, path, remote_path, delete=True)
-    c.run(f"ls -a")
 
 
 def run_training_configuration(connection, parameters, num_hosts, slots_per_host):
@@ -100,14 +100,15 @@ def run_training_configuration(connection, parameters, num_hosts, slots_per_host
         for name, value
         in parameters.items()
     )
-    command = f'source ~/susml/jakob_torben/bin/activate && mpirun --host {host_string} python {TRAIN_SCRIPT} {parameter_string}'
+    source_cmd = "source ~/susml/jakob_torben/bin/activate"
+    command = f'{source_cmd} && mpirun --host {host_string} bash -c \'{source_cmd} && python {TRAIN_SCRIPT} {parameter_string}\''
     stdout, stderr, seconds = measure_time(connection, command)
     return command, stdout, stderr, seconds
 
 
 def measure_time(connection, command):
     start_time = time.time()
-    result = connection.run(command, hide='both')
+    result = connection.run(command)
     end_time = time.time()
     execution_seconds = end_time - start_time
     return result.stdout, result.stderr, execution_seconds
