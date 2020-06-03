@@ -1,9 +1,9 @@
 import argparse
 from pathlib import Path
-
+import torch
 from dataset import CoronaDataset
 from model import CoronaVirusPredictor
-from trainer import DDPTrainer
+from trainer import DDPTrainer, Trainer
 
 import logging
 
@@ -24,8 +24,12 @@ def main():
     parser.add_argument("--learning-rate", default=1e-3, type=float)
     parser.add_argument("--dropout", default=0.1, type=float)
     parser.add_argument("--log", default="INFO")
+    parser.add_argument("--num-threads", default=4, type=int)
+    parser.add_argument("--use-local", action='store_true')
 
     args = parser.parse_args()
+
+    torch.set_num_threads(args.num_threads)
 
     logging.getLogger().setLevel(args.log)
 
@@ -41,15 +45,27 @@ def main():
         output_dim=1,
     )
 
-    logging.info("Create trainer")
-    trainer = DDPTrainer(
-        model=model,
-        training_set=training_set,
-        validation_set=validation_set,
-        batch_size=args.batch_size,
-        learning_rate=args.learning_rate,
-        checkpoint_dir=args.checkpoint_directory
-    )
+    if args.use_local:
+        logging.info("Use local trainer")
+        trainer = Trainer(
+            model=model,
+            training_set=training_set,
+            validation_set=validation_set,
+            batch_size=args.batch_size,
+            learning_rate=args.learning_rate,
+            checkpoint_dir=args.checkpoint_directory
+        )
+    else:
+        logging.info("Use distributed trainer")
+        trainer = DDPTrainer(
+            model=model,
+            training_set=training_set,
+            validation_set=validation_set,
+            batch_size=args.batch_size,
+            learning_rate=args.learning_rate,
+            checkpoint_dir=args.checkpoint_directory
+        )
+
     logging.info("Train model...")
     trained_model, history, validation_history = trainer.train(epochs=args.epochs)
 

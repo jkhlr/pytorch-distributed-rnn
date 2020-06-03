@@ -12,7 +12,9 @@ import logging
 class Trainer:
     loss_fn = MSELoss()
 
-    def __init__(self, model, training_set, batch_size, learning_rate, validation_set=None, checkpoint_dir=None, sampler=None):
+    def __init__(self, model, training_set, batch_size, learning_rate, validation_set=None, checkpoint_dir=None, sampler=None, rank=0):
+        logging.debug(f"Dataset size: {len(training_set)}")
+        self.rank = rank
         self.model = model
         self.checkpoint_dir = checkpoint_dir
         self.sampler=sampler
@@ -102,8 +104,8 @@ class Trainer:
 class DDPTrainer(Trainer):
     def __init__(self, model, training_set, batch_size, learning_rate, validation_set=None, checkpoint_dir=None):
         init_process_group('mpi')
-        self.rank = get_rank()
         self.world_size = get_world_size()
+        self.rank = get_rank()
         super().__init__(
             model=DistributedDataParallel(model),
             training_set=training_set,
@@ -111,7 +113,8 @@ class DDPTrainer(Trainer):
             batch_size=batch_size,
             learning_rate=learning_rate,
             checkpoint_dir=checkpoint_dir,
-            sampler=DistributedSampler(training_set, num_replicas=self.world_size, rank=self.rank, shuffle=True)
+            sampler=DistributedSampler(training_set, num_replicas=self.world_size, rank=self.rank, shuffle=True),
+            rank=self.rank
         )
 
     def _get_validation_set(self, validation_set):
