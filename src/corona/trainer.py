@@ -13,6 +13,8 @@ class Trainer:
     loss_fn = MSELoss()
 
     def __init__(self, model, training_set, batch_size, learning_rate, validation_set=None, checkpoint_dir=None, sampler=None):
+        if not hasattr(self, 'rank'):
+            self.rank = 0
         self.model = model
         self.checkpoint_dir = checkpoint_dir
         self.sampler=sampler
@@ -36,7 +38,7 @@ class Trainer:
         for epoch in range(epochs):
             if self.sampler is not None:
                 self.sampler.set_epoch(epoch)
-            logging.info(f"{self.rank} Start Epoch {epoch}")
+            print(f"{self.rank} Start Epoch {epoch}")
             loss_avg = self._train_step()
             training_history.append(loss_avg)
             self._print_loss(epoch, loss_avg)
@@ -54,6 +56,7 @@ class Trainer:
     def _train_step(self):
         self.model.train()
         loss_sum = 0
+        print(f'{self.rank}: {len(self.data_loader)} batches')
         for idx, (train_data, train_labels) in enumerate(self.data_loader):
             logging.debug(f"{self.rank} Batch Nr: {idx}")
             train_data = train_data.requires_grad_()
