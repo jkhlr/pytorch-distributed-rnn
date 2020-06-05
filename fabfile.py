@@ -24,7 +24,8 @@ TRAIN_SCRIPT = '~/susml/jakob_torben/src/corona/main.py'
 
 DEBUG_RUN = {
     'hosts': 2,
-    'slots': 4,
+    'slots': 2,
+    'threads': 2
     'parameters': {
         '--stacked-layer': 1,
         '--hidden-units': 32,
@@ -38,6 +39,7 @@ TRAIN_RUNS = [
     {
         'hosts': num_hosts,
         'slots': num_slots,
+        'threads': num_threads
         'parameters': {
             '--stacked-layer': 1,
             '--hidden-units': 32,
@@ -47,8 +49,10 @@ TRAIN_RUNS = [
         }
     }
     for batch_size in [32, 64, 128, 256]
-    for num_slots in range(1, 5)
-    for num_hosts in range(1, 13)
+    for num_threads in [1, 2, 3, 4]
+    for num_slots in [1, 2, 3, 4]
+    for num_hosts in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    if num_slots * num_threads <= 4
 ]
 
 
@@ -75,7 +79,7 @@ def copy_files(c):
     rsync(c, source_path, remote_path, delete=True)
 
 
-def run_training_configuration(connection, parameters, num_hosts, slots_per_host):
+def run_training_configuration(connection, parameters, num_hosts, slots_per_host, threads_per_slot):
     host_string = ','.join(([MASTER] + SLAVES)[:num_hosts] * slots_per_host)
     parameter_string = ' '.join(
         f'{name} {value}'
@@ -83,7 +87,11 @@ def run_training_configuration(connection, parameters, num_hosts, slots_per_host
         in parameters.items()
     )
     source_cmd = "source ~/susml/jakob_torben/bin/activate"
-    command = f'{source_cmd} && mpirun --host {host_string} bash -c \'{source_cmd} && python {TRAIN_SCRIPT} {parameter_string}\''
+    command = (
+        f"{source_cmd} && "
+        f"mpirun --host {host_string} --map-by socket:pe={threads_per_slot} "
+        f"bash -c '{source_cmd} && python {TRAIN_SCRIPT} {parameter_string}'"
+    
     stdout, stderr, seconds = measure_time(connection, command)
     return command, stdout, stderr, seconds
 
@@ -94,41 +102,39 @@ def measure_time(connection, command):
     end_time = time.time()
     execution_seconds = end_time - start_time
     return result.stdout, result.stderr, execution_seconds
+        
 
-
-@task
-def run_training(c):
+def run_training(connection, configurations=None, result_filename=None)
+    result_filename = result_filename or RESULT_FILE
+    configurations = configurations or TRAIN_RUNS
     results = []
-    for run in TRAIN_RUNS:
+    for run in configurations:
         command, stdout, stderr, seconds = run_training_configuration(
-            connection=c,
+            connection=connection,
             parameters=run['parameters'],
             num_hosts=run['hosts'],
-            slots_per_host=run['slots']
+            slots_per_host=run['slots'],
+            threads_per_slot=run['threads']
         )
         results.append({
             'command': command,
             'stdout': stdout,
             'stderr': stderr,
-            'seconds': seconds
+            'seconds': seconds,
+            'batch_size': run['parameters']['--batch-size']
+            'nodes': run['hosts'],
+            'processes_per_node': run['slots'],
+            'threads_per_process': run['threads']
         })
-        with open(RESULT_FILE, 'w') as f:
+        with open(result_filename, 'w') as f:
             json.dump({'results': results}, f)
 
 
 @task
-def run_debug_training(c):
-    command, stdout, stderr, seconds = run_training_configuration(
-        connection=c,
-        parameters=DEBUG_RUN['parameters'],
-        num_hosts=DEBUG_RUN['hosts'],
-        slots_per_host=DEBUG_RUN['slots']
-    )
-    print('COMMAND:')
-    print(command)
-    print('STDOUT:')
-    print(stdout.strip())
-    print('STDERR:')
-    print(stderr.strip())
-    print('SECONDS:')
-    print(seconds)
+def run_debug(c):
+        run_training(c, configurations=[DEBUG_RUN], result_filename='results_debug.json')
+
+        
+@task
+def run_all(c):
+        run_training(c)
