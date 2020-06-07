@@ -1,11 +1,8 @@
 import logging
-from itertools import product
 
 import torch
 from torch.utils import data
 from torch.utils.data.dataset import random_split
-
-types = list(product(("X", "y"), ("train", "test")))
 
 
 class MotionDataset(data.Dataset):
@@ -18,22 +15,17 @@ class MotionDataset(data.Dataset):
         "LAYING"
     ]
 
-    def __init__(self, X_train, y_train, X_test, y_test):
-        self.X_train = X_train
-        self.y_train = y_train
-        self.X_test = X_test
-        self.y_test = y_test
-        self.seq_length = self.X_train.shape[1]
-        self.num_features = self.X_train.shape[2]
+    def __init__(self, features, labels):
+        self.features = features
+        self.labels = labels
+        self.seq_length = self.features.shape[1]
+        self.num_features = self.features.shape[2]
 
     def __getitem__(self, index):
-        return self.X_train[index], self.y_train[index]
+        return self.features[index], self.labels[index]
 
     def __len__(self):
-        return len(self.X_train)
-
-    def test_data(self):
-        return self.X_test, self.y_test
+        return len(self.features)
 
     def random_split(self, validation_fraction=0.05):
         validation_examples = int(len(self) * validation_fraction)
@@ -41,17 +33,20 @@ class MotionDataset(data.Dataset):
         return random_split(self, [training_examples, validation_examples])
 
     @classmethod
-    def load(cls, base_path, output_path):
-        if cls.processed_data_exists(base_path):
+    def load(cls, base_path, test=False, output_path=None):
+        data_type = "test" if test else "train"
+        feature_path, label_path = cls.get_data_path(base_path, data_type)
+        if cls.processed_data_exists([feature_path, label_path]):
             logging.info("Preprocessed data found. Skip preprocessing.")
-            input_data = {f"{data_type}_{set_type}": torch.load(base_path / f"{data_type}_{set_type}.pt") for
-                          (data_type, set_type) in types}
-            return cls(input_data["X_train"], input_data["y_train"], input_data["X_test"], input_data["y_test"])
+            features = torch.load(feature_path)
+            labels = torch.load(label_path)
+            return cls(features, labels)
 
         if output_path is None:
             output_path = base_path
-        # only import if necessary
         logging.info("No processed data found. Preprocess raw data...")
+        # the processor creates train and test data. We save both and select the one we need.
+        # only import if necessary
         from processor import MotionDataProcessor
         processor = MotionDataProcessor()
         (X_train, y_train), (X_test, y_test) = processor.process_data(base_path)
@@ -59,9 +54,13 @@ class MotionDataset(data.Dataset):
         torch.save(y_train, output_path / "y_train.pt")
         torch.save(X_test, output_path / "X_test.pt")
         torch.save(y_test, output_path / "y_test.pt")
-        return cls(X_train, y_train, X_test, y_test)
+        (features, labels) = (X_test, y_test) if test else (X_train, y_train)
+        return cls(features, labels)
 
     @classmethod
-    def processed_data_exists(cls, base_path):
-        paths = [base_path / f"{data_type}_{set_type}.pt" for (data_type, set_type) in types]
+    def processed_data_exists(cls, paths):
         return all(map(lambda path: path.exists(), paths))
+
+    @classmethod
+    def get_data_path(cls, base_path, data_type):
+        return base_path / f"X_{data_type}.pt", base_path / f"y_{data_type}.pt"

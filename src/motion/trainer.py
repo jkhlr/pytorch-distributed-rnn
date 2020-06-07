@@ -19,6 +19,7 @@ class Trainer:
         self.model = model
         self.checkpoint_dir = checkpoint_dir
         self.sampler = sampler
+        self.formatter = None  # set in train
         self.train_loader = self._get_data_loader(training_set, batch_size=batch_size, sampler=sampler)
         self.validation_loader = self._get_data_loader(validation_set, batch_size=batch_size, shuffle=False)
         self.test_loader = self._get_data_loader(test_set, batch_size=batch_size, shuffle=False)
@@ -35,6 +36,7 @@ class Trainer:
         return DataLoader(dataset, batch_size=batch_size, shuffle=(sampler is None and shuffle), sampler=sampler)
 
     def train(self, epochs):
+        self.formatter = TrainingMessageFormatter(self.rank, epochs)
         training_history = []
         validation_history = []
         best_loss = None
@@ -42,12 +44,12 @@ class Trainer:
         for epoch in range(epochs):
             if self.sampler is not None:
                 self.sampler.set_epoch(epoch)
-            logging.info(f"{self.rank} Start Epoch {epoch}")
+            logging.info(f"{self.rank} Start Epoch {epoch+1}")
             train_loss, train_acc = self._train_step()
             training_history.append(train_loss)
 
             if self.validation_loader is not None:
-                validation_loss, val_acc = self._evaluate(self.validation_loader)
+                validation_loss, val_acc = self._evaluate(self.validation_loader, epoch)
                 validation_history.append(validation_loss)
 
                 if best_loss is None or best_loss > validation_loss:
@@ -58,7 +60,6 @@ class Trainer:
                 self._save_checkpoint(epoch, train_loss)
 
         if self.test_loader is not None:
-            print("Evaluation on test data:")
             self._evaluate(self.validation_loader)
 
         return self.model.eval(), training_history, validation_history
@@ -78,17 +79,15 @@ class Trainer:
             total_correct += correct
             loss.backward()
             self.optimizer.step()
-
-            if batch_idx % 1 == 0:
-                print('Rank: {}\tTrain Batch: {}/{} ({:.0f}%)\tLoss: {:.6f}\tAcc: {}/{} ({:.0f}%)'.format(
-                    self.rank, batch_idx, len(self.train_loader), 100. * batch_idx / len(self.train_loader),
-                    loss.item(), correct, len(labels), 100. * correct / len(labels)))
+            logging.info(self.formatter.train_progress_message(batch_idx=batch_idx, batches=len(self.train_loader),
+                                                               training_examples=len(data), correct=correct,
+                                                               loss=loss.item()))
 
         train_loss = total_loss / len(self.train_loader.dataset)
         train_acc = total_correct / len(self.train_loader.dataset)
         return train_loss, train_acc
 
-    def _evaluate(self, data_loader):
+    def _evaluate(self, data_loader, epoch=None):
         self.model.eval()
         eval_loss = 0.
         total_correct = 0
@@ -97,20 +96,20 @@ class Trainer:
                 output = self.model(data)
                 labels = labels.long().squeeze(1)
                 eval_loss += self.loss_fn(output, labels).item()
-                total_correct += (torch.argmax(output, dim=1).eq(labels)).sum()
+                total_correct += (torch.argmax(output, dim=1) == labels).sum()
                 logging.debug(f"Model predicted {torch.argmax(output, dim=1).data}; Correct was {labels.data}")
 
-        eval_loss /= len(data_loader.dataset)
-        accuracy = total_correct / len(data_loader.dataset)
+        eval_loss /= len(data_loader)
+        accuracy = float(total_correct) / len(data_loader.dataset)
 
-        print('\nEval set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-            eval_loss, total_correct, len(data_loader.dataset), 100. * accuracy))
+        logging.info(self.formatter.evaluation_message(accuracy, len(data_loader), epoch, eval_loss, total_correct))
         return eval_loss, accuracy
 
     def _reset_hidden_state(self):
         self.model.reset_hidden_state()
 
     def _save_checkpoint(self, epoch, loss, best=False):
+        epoch += 1
         if self.checkpoint_dir is None:
             return
         if not self.checkpoint_dir.exists():
@@ -152,9 +151,33 @@ class DDPTrainer(Trainer):
     def _reset_hidden_state(self):
         self.model.module.reset_hidden_state()
 
-    def _print_loss(self, epoch, loss, type="train"):
-        logging.info(f'{self.rank}: Epoch {epoch} {type} loss: {loss}')
-
     def _save_checkpoint(self, epoch, loss, best=False):
         if self.rank != 0:
             return
+
+
+class TrainingMessageFormatter:
+    def __init__(self, rank, num_epochs):
+        self.rank = rank
+        self.num_epochs = num_epochs
+
+    def train_progress_message(self, batch_idx, batches, training_examples, correct, loss):
+        batch_idx += 1
+        return 'Rank: {}\tTrain Batch: {}/{} ({:.0f}%)\tLoss: {:.6f}\tAcc: {}/{} ({:.0f}%)' \
+            .format(self.rank, batch_idx, batches, percentage(batch_idx, batches), loss, correct, training_examples,
+                    percentage(float(correct), training_examples))
+
+    def evaluation_message(self, accuracy, examples, epoch, eval_loss, total_correct):
+        epoch += 1
+        metrics = 'Average loss: {:.4f}\t Accuracy: {}/{} ({:.0f}%)\n' \
+            .format(eval_loss, total_correct, examples, 100. * accuracy)
+        if epoch is None:
+            prefix = "Test Evaluation:\t"
+        else:
+            prefix = 'Evaluation Epoch: {}/{}({:.0f}%)\t' \
+                .format(epoch, self.num_epochs, percentage(epoch, self.num_epochs))
+        return prefix + metrics
+
+
+def percentage(current, overall):
+    return 100. * (current / overall)

@@ -21,10 +21,10 @@ def main():
     parser.add_argument("--stacked-layer", default=2, type=int)
     parser.add_argument("--hidden-units", default=128, type=int)
     parser.add_argument("--epochs", default=100, type=int)
-    parser.add_argument("--validation-fraction", default=0.05, type=float)
+    parser.add_argument("--validation-fraction", default=0.1, type=float)
     parser.add_argument("--batch-size", default=256, type=int)
     parser.add_argument("--learning-rate", default=0.0025, type=float)
-    parser.add_argument("--dropout", default=0.1, type=float)
+    parser.add_argument("--dropout", default=0.3, type=float)
     parser.add_argument("--log", default="INFO")
     parser.add_argument("--num-threads", default=4, type=int)
     parser.add_argument("--use-local", action='store_true')
@@ -35,10 +35,13 @@ def main():
     logging.getLogger().setLevel(args.log)
 
     logging.info("Start DataLoader")
-    dataset = MotionDataset.load(args.dataset_path, args.output_path)
+    dataset = MotionDataset.load(args.dataset_path, output_path=args.output_path, test=False)
     training_set, validation_set = dataset.random_split(validation_fraction=args.validation_fraction)
-    logging.debug(f"Training set of size {len(training_set)}")
-    logging.debug(f"Validation set of size {len(validation_set)}")
+
+    test_set = MotionDataset.load(args.dataset_path, output_path=args.output_path, test=True)
+    logging.info(f"Training set of size {len(training_set)}")
+    logging.info(f"Validation set of size {len(validation_set)}")
+    logging.info(f"Test set of size {len(test_set)}")
 
     logging.info("Create model")
     model = MotionModel(
@@ -54,6 +57,7 @@ def main():
             model=model,
             training_set=training_set,
             validation_set=validation_set,
+            test_set=test_set,
             batch_size=args.batch_size,
             learning_rate=args.learning_rate,
             checkpoint_dir=args.checkpoint_directory
@@ -64,6 +68,7 @@ def main():
             model=model,
             training_set=training_set,
             validation_set=validation_set,
+            test_set=test_set,
             batch_size=args.batch_size,
             learning_rate=args.learning_rate,
             checkpoint_dir=args.checkpoint_directory
