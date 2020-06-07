@@ -61,7 +61,7 @@ class Trainer:
                 self._save_checkpoint(epoch, train_loss)
 
         if self.test_loader is not None:
-            self._evaluate(self.validation_loader)
+            self._evaluate(self.test_loader)
 
         return self.model.eval(), training_history, validation_history
 

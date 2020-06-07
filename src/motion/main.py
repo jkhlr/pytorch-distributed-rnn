@@ -76,7 +76,7 @@ def main():
     logging.info("Train model...")
     trained_model, train_history, validation_history = trainer.train(epochs=args.epochs)
     history = {"train_history": train_history, "validation_history": validation_history}
-    with open('json_data.json', 'w') as file:
+    with open('history.json', 'w') as file:
         json.dump(history, file)
 
 
