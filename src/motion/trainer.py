@@ -44,7 +44,7 @@ class Trainer:
         for epoch in range(epochs):
             if self.sampler is not None:
                 self.sampler.set_epoch(epoch)
-            logging.info(f"{self.rank} Start Epoch {epoch+1}")
+            logging.info(f"{self.rank} Start Epoch {epoch + 1}")
             train_loss, train_acc = self._train_step()
             training_history.append(train_loss)
 
@@ -100,9 +100,10 @@ class Trainer:
                 logging.debug(f"Model predicted {torch.argmax(output, dim=1).data}; Correct was {labels.data}")
 
         eval_loss /= len(data_loader)
-        accuracy = float(total_correct) / len(data_loader.dataset)
+        num_examples = len(data_loader.dataset)
+        accuracy = float(total_correct) / num_examples
 
-        logging.info(self.formatter.evaluation_message(accuracy, len(data_loader), epoch, eval_loss, total_correct))
+        logging.info(self.formatter.evaluation_message(accuracy, num_examples, epoch, eval_loss, total_correct))
         return eval_loss, accuracy
 
     def _reset_hidden_state(self):
@@ -163,18 +164,18 @@ class TrainingMessageFormatter:
 
     def train_progress_message(self, batch_idx, batches, training_examples, correct, loss):
         batch_idx += 1
-        return 'Rank: {}\tTrain Batch: {}/{} ({:.0f}%)\tLoss: {:.6f}\tAcc: {}/{} ({:.0f}%)' \
+        return 'Rank: {:02d}   Train Batch: {}/{} ({:.0f}%)\tLoss: {:.6f}\tAcc: {}/{} ({:.0f}%)' \
             .format(self.rank, batch_idx, batches, percentage(batch_idx, batches), loss, correct, training_examples,
                     percentage(float(correct), training_examples))
 
     def evaluation_message(self, accuracy, examples, epoch, eval_loss, total_correct):
-        epoch += 1
-        metrics = 'Average loss: {:.4f}\t Accuracy: {}/{} ({:.0f}%)\n' \
+        metrics = 'Loss: {:.4f}\t Accuracy: {}/{} ({:.0f}%)\n' \
             .format(eval_loss, total_correct, examples, 100. * accuracy)
         if epoch is None:
             prefix = "Test Evaluation:\t"
         else:
-            prefix = 'Evaluation Epoch: {}/{}({:.0f}%)\t' \
+            epoch += 1
+            prefix = 'Evaluation Epoch: {}/{} ({:.0f}%)\t' \
                 .format(epoch, self.num_epochs, percentage(epoch, self.num_epochs))
         return prefix + metrics
 
