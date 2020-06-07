@@ -2,7 +2,7 @@ import argparse
 from pathlib import Path
 
 from dataset import CoronaDataset
-from model import MotionModel
+from model import CoronaVirusPredictor
 from trainer import DDPTrainer
 
 import logging
@@ -34,7 +34,7 @@ def main():
     training_set, validation_set = dataset.random_split(validation_fraction=args.validation_fraction)
 
     logging.info("Create model")
-    model = MotionModel(
+    model = CoronaVirusPredictor(
         input_dim=dataset.num_features,
         hidden_dim=args.hidden_units,
         layer_dim=args.stacked_layer,
