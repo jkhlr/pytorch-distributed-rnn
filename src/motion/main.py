@@ -1,4 +1,5 @@
 import argparse
+import json
 import logging
 from pathlib import Path
 
@@ -34,7 +35,6 @@ def main():
     torch.set_num_threads(args.num_threads)
     logging.getLogger().setLevel(args.log)
 
-    logging.info("Start DataLoader")
     dataset = MotionDataset.load(args.dataset_path, output_path=args.output_path, test=False)
     training_set, validation_set = dataset.random_split(validation_fraction=args.validation_fraction)
 
@@ -74,7 +74,10 @@ def main():
             checkpoint_dir=args.checkpoint_directory
         )
     logging.info("Train model...")
-    trained_model, history, validation_history = trainer.train(epochs=args.epochs)
+    trained_model, train_history, validation_history = trainer.train(epochs=args.epochs)
+    history = {"train_history": train_history, "validation_history": validation_history}
+    with open('json_data.json', 'w') as file:
+        json.dump(history, file)
 
 
 if __name__ == '__main__':

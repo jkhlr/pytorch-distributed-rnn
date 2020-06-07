@@ -53,8 +53,9 @@ class Trainer:
                 validation_history.append(validation_loss)
 
                 if best_loss is None or best_loss > validation_loss:
+                    logging.info(f"New best model in epoch {epoch+1}")
                     best_loss = validation_loss
-                    self._save_checkpoint(epoch, validation_loss)
+                    self._save_checkpoint(epoch, validation_loss, best=True)
 
             if self.rank == 0 and (epoch % 10 == 0 or epoch == epochs - 1):
                 self._save_checkpoint(epoch, train_loss)
