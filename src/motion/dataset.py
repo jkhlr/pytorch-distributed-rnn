@@ -3,6 +3,7 @@ import logging
 import torch
 from torch.utils import data
 from torch.utils.data.dataset import random_split
+from processor import MotionDataProcessor
 
 
 class MotionDataset(data.Dataset):
@@ -45,9 +46,6 @@ class MotionDataset(data.Dataset):
         if output_path is None:
             output_path = base_path
         logging.info("No processed data found. Preprocess raw data...")
-        # the processor creates train and test data. We save both and select the one we need.
-        # only import if necessary
-        from processor import MotionDataProcessor
         processor = MotionDataProcessor()
         (X_train, y_train), (X_test, y_test) = processor.process_data(base_path)
         torch.save(X_train, output_path / "X_train.pt")
