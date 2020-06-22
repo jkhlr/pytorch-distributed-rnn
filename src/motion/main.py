@@ -3,6 +3,7 @@ import json
 import logging
 from pathlib import Path
 
+import param_server
 from dataset import MotionDataset
 from model import MotionModel
 from trainer.base import Trainer
@@ -28,9 +29,25 @@ def main():
     parser.add_argument('--dropout', default=0.3, type=float)
     parser.add_argument('--log', default='INFO')
     parser.add_argument('--num-threads', default=4, type=int)
-    parser.add_argument('--trainer', default='local', type=str)
-    args = parser.parse_args()
 
+    sub_parser = parser.add_subparsers(title='Available commands', metavar='command [options ...]')
+
+    param_server.create_sub_parser(sub_parser)
+
+    create_parser(sub_parser, 'local', Trainer)
+    create_parser(sub_parser, 'distributed', DDPTrainer)
+    create_parser(sub_parser, 'horovod', HorovodTrainer)
+
+    args = parser.parse_args()
+    args.func(args)
+
+
+def create_parser(sub_parser, name, trainer_class):
+    parser = sub_parser.add_parser(name)
+    parser.set_defaults(func=lambda args: train(args, trainer_class))
+
+
+def train(args, trainer):
     logging.getLogger().setLevel(args.log)
 
     dataset = MotionDataset.load(args.dataset_path, output_path=args.output_path, test=False)
@@ -56,17 +73,7 @@ def main():
         learning_rate=args.learning_rate,
         checkpoint_dir=args.checkpoint_directory
     )
-    if args.trainer == 'local':
-        logging.info('Use local trainer')
-        trainer = Trainer(**trainer_args)
-    elif args.trainer == 'ddp':
-        logging.info('Use DDP trainer')
-        trainer = DDPTrainer(**trainer_args)
-    elif args.trainer == 'horovod':
-        logging.info('Use Horovod trainer')
-        trainer = HorovodTrainer(**trainer_args)
-    else:
-        raise ValueError(f'ERROR: Invalid trainer: {args.trainer}')
+    trainer = trainer(**trainer_args)
 
     logging.info(f'Training model for {args.epochs} epochs...')
     trained_model, train_history, validation_history = trainer.train(epochs=args.epochs)
