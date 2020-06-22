@@ -3,12 +3,16 @@ from threading import Lock
 
 import torch.distributed.autograd as dist_autograd
 import torch.distributed.rpc as rpc
-import torch.nn as nn
 
 import model
 
+# The global parameter server instance.
+param_network = None
+# A lock to ensure we only have one parameter server.
+global_lock = Lock()
 
-class ParameterServer(nn.Module):
+
+class MasterNetwork:
     def __init__(self, input_dim, hidden_dim, layer_dim, output_dim):
         super().__init__()
         self.model = model.MotionModel(input_dim, hidden_dim, layer_dim, output_dim)
@@ -28,23 +32,17 @@ class ParameterServer(nn.Module):
         return param_rrefs
 
 
-# The global parameter server instance.
-param_server = None
-# A lock to ensure we only have one parameter server.
-global_lock = Lock()
-
-
-def get_parameter_server(input_dim, hidden_dim, layer_dim, output_dim):
+def get_parameter_network(input_dim, hidden_dim, layer_dim, output_dim):
     """
     Returns a singleton parameter server to all trainer processes
     """
-    global param_server
+    global param_network
     # Ensure that we get only one handle to the ParameterServer.
     with global_lock:
-        if not param_server:
+        if not param_network:
             # construct it once
-            param_server = ParameterServer(input_dim, hidden_dim, layer_dim, output_dim)
-        return param_server
+            param_network = MasterNetwork(input_dim, hidden_dim, layer_dim, output_dim)
+        return param_network
 
 
 def run_parameter_server(rank, world_size):
@@ -57,5 +55,5 @@ def run_parameter_server(rank, world_size):
     rpc.init_rpc(name="parameter_server", rank=rank, world_size=world_size)
     rpc._set_rpc_timeout(timedelta(seconds=60))
     print("RPC initialized! Running parameter server...")
-    rpc.shutdown()
+    rpc.shutdown(graceful=True)
     print("RPC shutdown on parameter server.")

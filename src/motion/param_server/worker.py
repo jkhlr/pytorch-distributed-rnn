@@ -6,74 +6,96 @@ import torch.distributed.rpc as rpc
 import torch.nn as nn
 from torch import optim
 from torch.distributed.optim import DistributedOptimizer
+from torch.utils.data import DistributedSampler
 
-from param_server.server import get_parameter_server, ParameterServer
+from param_server.master import get_parameter_network, MasterNetwork
 from param_server.util import remote_method
+from trainer.base import Trainer
+from trainer.formatter import TrainingMessageFormatter
 
 
-class Worker(nn.Module):
+class ParameterWorkerTrainer(Trainer):
+    def __init__(self, rank, wold_size, model, training_set, batch_size, learning_rate, validation_set=None,
+                 test_set=None,
+                 checkpoint_dir=None):
+        self.rank = rank
+        self.world_size = wold_size
+        super().__init__(
+            model=model,
+            training_set=training_set,
+            validation_set=self._get_eval_set(validation_set),
+            test_set=self._get_eval_set(test_set),
+            batch_size=batch_size,
+            learning_rate=learning_rate,
+            checkpoint_dir=checkpoint_dir,
+            sampler=DistributedSampler(training_set, num_replicas=self.world_size, rank=self.rank),
+        )
+
+    def _get_formatter(self, epochs):
+        return TrainingMessageFormatter(epochs, self.rank)
+
+    def _get_optimizer(self, model, lr):
+        return DistributedOptimizer(optim.Adam, model.get_global_param_rrefs(), lr=lr)
+
+    def _train_step(self, formatter):
+        self.model.train()
+        total_loss = 0.
+        total_correct = 0
+        for batch_idx, (data, target) in enumerate(self.train_loader):
+            with dist_autograd.context() as cid:
+                output = self.model(data)
+                target = target.long().squeeze(1)
+                loss = self.loss_fn(output, target)
+                total_loss += loss.item()
+                correct = (torch.argmax(output, dim=1) == target).sum()
+                total_correct += correct
+                dist_autograd.backward([loss])
+                # Ensure that dist autograd ran successfully and gradients were
+                # returned.
+                assert remote_method(
+                    MasterNetwork.get_dist_gradients,
+                    self.model.param_server_rref,
+                    cid) != {}
+                self.optimizer.step()
+                print(formatter.train_progress_message(batch_idx=batch_idx, batches=len(self.train_loader),
+                                                       training_examples=len(data), correct=correct,
+                                                       loss=loss.item()))
+        train_loss = total_loss / len(self.train_loader.dataset)
+        train_acc = total_correct / len(self.train_loader.dataset)
+        return train_loss, train_acc
+
+    def _get_eval_set(self, eval_set):
+        if self.rank is None or self.rank == 0:
+            return eval_set
+        else:
+            return None
+
+    def _save_checkpoint(self, epoch, loss, best=False):
+        if self.rank != 0:
+            return
+
+
+class WorkerNetwork(nn.Module):
     def __init__(self, input_dim, hidden_dim, layer_dim, output_dim):
         super().__init__()
         self.param_server_rref = rpc.remote(
-            "parameter_server", get_parameter_server, args=(input_dim, hidden_dim, layer_dim, output_dim)
+            "parameter_server", get_parameter_network, args=(input_dim, hidden_dim, layer_dim, output_dim)
         )
 
     def get_global_param_rrefs(self):
         remote_params = remote_method(
-            ParameterServer.get_param_rrefs,
+            MasterNetwork.get_param_rrefs,
             self.param_server_rref)
         return remote_params
 
     def forward(self, x):
         model_output = remote_method(
-            ParameterServer.forward, self.param_server_rref, x)
+            MasterNetwork.forward, self.param_server_rref, x)
         return model_output
 
 
-def run_training_loop(rank, input_dim, hidden_dim, layer_dim, output_dim, train_loader, test_loader):
-    # Runs the typical nueral network forward + backward + optimizer step, but
-    # in a server fashion.
-    net = Worker(input_dim, hidden_dim, layer_dim, output_dim)
-    # Build DistributedOptimizer.
-    param_rrefs = net.get_global_param_rrefs()
-    opt = DistributedOptimizer(optim.SGD, param_rrefs, lr=0.03)
-    loss_fn = nn.CrossEntropyLoss()
-    for i, (data, target) in enumerate(train_loader):
-        with dist_autograd.context() as cid:
-            model_output = net(data)
-            target = target.long().squeeze(1)
-            loss = loss_fn(model_output, target)
-            if i % 5 == 0:
-                print(f"Rank {rank} training batch {i} loss {loss.item()}")
-            dist_autograd.backward([loss])
-            # Ensure that dist autograd ran successfully and gradients were
-            # returned.
-            assert remote_method(
-                ParameterServer.get_dist_gradients,
-                net.param_server_rref,
-                cid) != {}
-            opt.step()
-
-    print("Training complete!")
-    print("Getting accuracy....")
-    get_accuracy(test_loader, net)
-
-
-def get_accuracy(test_loader, model):
-    model.eval()
-    correct_sum = 0
-    with torch.no_grad():
-        for i, (data, target) in enumerate(test_loader):
-            out = model(data)
-            pred = out.argmax(dim=1, keepdim=True)
-            correct = pred.eq(target.view_as(pred)).sum().item()
-            correct_sum += correct
-
-    print(f"Accuracy {correct_sum / len(test_loader.dataset)}")
-
-
-# Main loop for trainers.
-def run_worker(rank, world_size, input_dim, hidden_dim, layer_dim, output_dim, train_loader, test_loader):
+def run_worker(rank, world_size, epochs, batch_size, learning_rate, input_dim, hidden_dim, layer_dim, output_dim,
+               train_set, validation_set, test_set):
     print(f"Worker rank {rank} initializing RPC")
     rpc.init_rpc(
         name=f"trainer_{rank}",
@@ -83,5 +105,8 @@ def run_worker(rank, world_size, input_dim, hidden_dim, layer_dim, output_dim, t
     rpc._set_rpc_timeout(timedelta(seconds=60))
     print(f"Worker {rank} done initializing RPC")
 
-    run_training_loop(rank, input_dim, hidden_dim, layer_dim, output_dim, train_loader, test_loader)
+    model = WorkerNetwork(input_dim, hidden_dim, layer_dim, output_dim)
+    worker = ParameterWorkerTrainer(rank, world_size, model, train_set, batch_size, learning_rate, validation_set,
+                                    test_set)
+    worker.train(epochs)
     rpc.shutdown()
