@@ -1,7 +1,9 @@
 import argparse
 import os
+from datetime import timedelta
 from pathlib import Path
 
+import torch.distributed.rpc as rpc
 import torch.multiprocessing as mp
 
 import dataset
@@ -38,7 +40,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     assert args.rank is not None, "must provide rank argument."
-    os.environ['MASTER_ADDR'] = args.master_addr
+    os.environ['MASTER_ADDR'] = args.master_address
     os.environ["MASTER_PORT"] = args.master_port
 
     SCRIPT_DIR = Path(__file__).absolute().parent

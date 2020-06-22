@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 import torch
 import torch.distributed.autograd as dist_autograd
 import torch.distributed.rpc as rpc
@@ -78,6 +80,7 @@ def run_worker(rank, world_size, input_dim, hidden_dim, layer_dim, output_dim, t
         rank=rank,
         world_size=world_size)
 
+    rpc._set_rpc_timeout(timedelta(seconds=60))
     print(f"Worker {rank} done initializing RPC")
 
     run_training_loop(rank, input_dim, hidden_dim, layer_dim, output_dim, train_loader, test_loader)

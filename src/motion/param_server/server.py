@@ -1,3 +1,4 @@
+from datetime import timedelta
 from threading import Lock
 
 import torch.distributed.autograd as dist_autograd
@@ -54,6 +55,7 @@ def run_parameter_server(rank, world_size):
     # to complete, and then exit.
     print("PS master initializing RPC")
     rpc.init_rpc(name="parameter_server", rank=rank, world_size=world_size)
+    rpc._set_rpc_timeout(timedelta(seconds=60))
     print("RPC initialized! Running parameter server...")
     rpc.shutdown()
     print("RPC shutdown on parameter server.")
