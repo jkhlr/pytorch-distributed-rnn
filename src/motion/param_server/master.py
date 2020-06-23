@@ -51,9 +51,9 @@ def run_parameter_server(rank, world_size):
     # rpc.shutdown() will wait for all workers to complete by default, which
     # in this case means that the parameter server will wait for all trainers
     # to complete, and then exit.
-    print("PS master initializing RPC")
-    rpc.init_rpc(name="parameter_server", rank=rank, world_size=world_size)
+    print('PS master initializing RPC')
+    rpc.init_rpc(name='parameter_server', rank=rank, world_size=world_size)
     rpc._set_rpc_timeout(timedelta(seconds=60))
-    print("RPC initialized! Running parameter server...")
+    print('RPC initialized! Running parameter server...')
     rpc.shutdown(graceful=True)
-    print("RPC shutdown on parameter server.")
+    print('RPC shutdown on parameter server.')

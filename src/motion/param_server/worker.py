@@ -79,7 +79,7 @@ class WorkerNetwork(nn.Module):
     def __init__(self, input_dim, hidden_dim, layer_dim, output_dim):
         super().__init__()
         self.param_server_rref = rpc.remote(
-            "parameter_server", get_parameter_network, args=(input_dim, hidden_dim, layer_dim, output_dim)
+            'parameter_server', get_parameter_network, args=(input_dim, hidden_dim, layer_dim, output_dim)
         )
 
     def get_global_param_rrefs(self):
@@ -96,14 +96,14 @@ class WorkerNetwork(nn.Module):
 
 def run_worker(rank, world_size, epochs, batch_size, learning_rate, input_dim, hidden_dim, layer_dim, output_dim,
                train_set, validation_set, test_set):
-    print(f"Worker rank {rank} initializing RPC")
+    print(f'Worker rank {rank} initializing RPC')
     rpc.init_rpc(
-        name=f"trainer_{rank}",
+        name=f'trainer_{rank}',
         rank=rank,
         world_size=world_size)
 
     rpc._set_rpc_timeout(timedelta(seconds=60))
-    print(f"Worker {rank} done initializing RPC")
+    print(f'Worker {rank} done initializing RPC')
 
     model = WorkerNetwork(input_dim, hidden_dim, layer_dim, output_dim)
     worker = ParameterWorkerTrainer(rank, world_size, model, train_set, batch_size, learning_rate, validation_set,
