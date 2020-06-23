@@ -17,11 +17,13 @@ RUN cd pytorch && python setup.py bdist_wheel
 
 FROM python:3.7.7-slim-buster as ssh
 
-RUN apt-get update && apt-get install -y -q openmpi-bin openmpi-common libopenmpi3 libopenmpi-dev libopenblas-dev libatlas-base-dev openssh-server
+RUN apt-get update && apt-get install -y -q g++ openmpi-bin openmpi-common libopenmpi3 libopenmpi-dev libopenblas-dev libatlas-base-dev openssh-server
 
 WORKDIR /code
 COPY --from=build-wheel /code/pytorch/dist/torch-1.4.0-cp37-cp37m-linux_x86_64.whl .
+RUN pip install numpy==1.18.5
 RUN pip install torch-1.4.0-cp37-cp37m-linux_x86_64.whl
+
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 

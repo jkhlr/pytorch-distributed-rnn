@@ -1,10 +1,10 @@
 import json
 import time
+from pathlib import Path
 
 from fabric import task
 from patchwork.transfers import rsync
 
-RESULT_FILE = 'results.json'
 MASTER = '192.168.2.15'
 SLAVES = [
     '192.168.2.2',
@@ -20,12 +20,16 @@ SLAVES = [
     '192.168.2.12'
 ]
 
-TRAIN_SCRIPT = '~/susml/jakob_torben/src/corona/main.py'
+WORKDIR = Path('~/susml/jakob_torben')
+SRC_DIR = WORKDIR / 'src/'
+DATASET = 'motion'
+TRAIN_SCRIPT = SRC_DIR / DATASET / 'main.py'
+RESULT_FILE = 'results.json'
 
 DEBUG_RUN = {
     'hosts': 2,
     'slots': 2,
-    'threads': 2
+    'threads': 2,
     'parameters': {
         '--stacked-layer': 1,
         '--hidden-units': 32,
@@ -39,7 +43,7 @@ TRAIN_RUNS = [
     {
         'hosts': num_hosts,
         'slots': num_slots,
-        'threads': num_threads
+        'threads': num_threads,
         'parameters': {
             '--stacked-layer': 1,
             '--hidden-units': 32,
@@ -73,10 +77,10 @@ def prepare_connections(c):
 
 @task
 def copy_files(c):
-    source_path = './src/corona'
-    remote_path = '~/susml/jakob_torben/src/'
-    c.run(f'mkdir -p {remote_path}')
-    rsync(c, source_path, remote_path, delete=True)
+    c.run(f'mkdir -p {WORKDIR}')
+
+    source_path = f'./src/{DATASET}'
+    rsync(c, source_path, WORKDIR, delete=True)
 
 
 def run_training_configuration(connection, parameters, num_hosts, slots_per_host, threads_per_slot):
@@ -86,12 +90,12 @@ def run_training_configuration(connection, parameters, num_hosts, slots_per_host
         for name, value
         in parameters.items()
     )
-    source_cmd = "source ~/susml/jakob_torben/bin/activate"
+    venv_python = WORKDIR / 'bin/python'
     command = (
-        f"{source_cmd} && "
-        f"mpirun --host {host_string} --map-by socket:pe={threads_per_slot} "
-        f"bash -c '{source_cmd} && python {TRAIN_SCRIPT} {parameter_string}'"
-    
+        f'mpirun --host {host_string} --map-by socket:pe={threads_per_slot} '
+        f"{venv_python} {TRAIN_SCRIPT} {parameter_string}'"
+    )
+
     stdout, stderr, seconds = measure_time(connection, command)
     return command, stdout, stderr, seconds
 
@@ -102,9 +106,9 @@ def measure_time(connection, command):
     end_time = time.time()
     execution_seconds = end_time - start_time
     return result.stdout, result.stderr, execution_seconds
-        
 
-def run_training(connection, configurations=None, result_filename=None)
+
+def run_training(connection, configurations=None, result_filename=None):
     result_filename = result_filename or RESULT_FILE
     configurations = configurations or TRAIN_RUNS
     results = []
@@ -121,7 +125,7 @@ def run_training(connection, configurations=None, result_filename=None)
             'stdout': stdout,
             'stderr': stderr,
             'seconds': seconds,
-            'batch_size': run['parameters']['--batch-size']
+            'batch_size': run['parameters']['--batch-size'],
             'nodes': run['hosts'],
             'processes_per_node': run['slots'],
             'threads_per_process': run['threads']
@@ -132,9 +136,9 @@ def run_training(connection, configurations=None, result_filename=None)
 
 @task
 def run_debug(c):
-        run_training(c, configurations=[DEBUG_RUN], result_filename='results_debug.json')
+    run_training(c, configurations=[DEBUG_RUN], result_filename='results_debug.json')
 
-        
+
 @task
 def run_all(c):
-        run_training(c)
+    run_training(c)
