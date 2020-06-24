@@ -3,6 +3,8 @@ services:
   master:
     hostname: master
     image: jkhlr/pytorch-mpi
+    cap_add:
+      - SYS_PTRACE
     ports:
       - 127.0.0.1:22:22
     networks:
@@ -12,6 +14,8 @@ services:
   slave:
     hostname: slave
     image: jkhlr/pytorch-mpi
+    cap_add:
+      - SYS_PTRACE
     networks:
       - net
     volumes:
