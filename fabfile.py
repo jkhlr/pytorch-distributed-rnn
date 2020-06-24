@@ -20,30 +20,18 @@ SLAVES = [
     '192.168.2.12'
 ]
 
-WORKDIR = Path('~/susml/jakob_torben')
-SRC_DIR = WORKDIR / 'src/'
+WORK_DIR = Path('~/susml/jakob_torben')
+BIN_DIR = WORK_DIR / 'bin'
+SRC_DIR = WORK_DIR / 'src'
 DATASET = 'motion'
 TRAIN_SCRIPT = SRC_DIR / DATASET / 'main.py'
 RESULT_FILE = 'results.json'
 
-DEBUG_RUN = {
-    'hosts': 2,
-    'slots': 2,
-    'threads': 2,
-    'parameters': {
-        '--stacked-layer': 1,
-        '--hidden-units': 32,
-        '--dropout': 0,
-        '--batch-size': 128,
-        '--epochs': 1
-    }
-}
-
 TRAIN_RUNS = [
     {
+        'trainer': trainer,
         'hosts': num_hosts,
         'slots': num_slots,
-        'threads': num_threads,
         'parameters': {
             '--stacked-layer': 1,
             '--hidden-units': 32,
@@ -53,11 +41,24 @@ TRAIN_RUNS = [
         }
     }
     for batch_size in [32, 64, 128, 256]
-    for num_threads in [1, 2, 3, 4]
     for num_slots in [1, 2, 3, 4]
     for num_hosts in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
-    if num_slots * num_threads <= 4
+    for trainer in ['local', 'distributed', 'horovod']
+    if trainer != 'local' or num_hosts == num_slots == 1
 ]
+
+DEBUG_RUN = {
+    'trainer': 'distributed',
+    'hosts': 2,
+    'slots': 1,
+    'parameters': {
+        '--stacked-layer': 1,
+        '--hidden-units': 32,
+        '--dropout': 0,
+        '--batch-size': 32,
+        '--epochs': 6
+    }
+}
 
 
 @task
@@ -71,30 +72,71 @@ def prepare_connections(c):
         c.run(f'{keyscan_command} >> {known_hosts_file}')
 
     hostnames = c.run(f'mpirun --host {",".join(SLAVES)} hostname').stdout
-    if not all(hostname == result for hostname, result in zip(SLAVES, hostnames.splitlines())):
+    if not all(hostname == result for hostname, result in
+               zip(SLAVES, hostnames.splitlines())):
         raise ValueError("Can't connect to slaves")
 
 
 @task
-def copy_files(c):
-    c.run(f'mkdir -p {WORKDIR}')
-
+def copy_src(c):
     source_path = f'./src/{DATASET}'
-    rsync(c, source_path, WORKDIR, delete=True)
+    dest_path = str(SRC_DIR)
+
+    c.run(f'mkdir -p {dest_path}')
+    rsync(c, source_path, dest_path, delete=True)
 
 
-def run_training_configuration(connection, parameters, num_hosts, slots_per_host, threads_per_slot):
-    host_string = ','.join(([MASTER] + SLAVES)[:num_hosts] * slots_per_host)
+@task
+def install_wheels(c):
+    # keep trailing slash to copy contents of source_path into dest_path
+    source_path = '/path/to/wheels/'
+    dest_path = '/tmp/wheels'
+
+    c.run(f'mkdir -p {dest_path}')
+    rsync(c, source_path, dest_path, delete=True)
+
+    pip_bin = BIN_DIR / 'pip'
+    c.run(f'{pip_bin} install {dest_path}/*.whl')
+
+
+def run_training_configuration(
+        connection,
+        trainer,
+        parameters,
+        num_hosts,
+        slots_per_host
+):
+    host_string = ','.join(
+        f'{address}:{slots_per_host}'
+        for address in ([MASTER] + SLAVES)[:num_hosts]
+    )
     parameter_string = ' '.join(
         f'{name} {value}'
         for name, value
         in parameters.items()
     )
-    venv_python = WORKDIR / 'bin/python'
-    command = (
-        f'mpirun --host {host_string} --map-by socket:pe={threads_per_slot} '
-        f"{venv_python} {TRAIN_SCRIPT} {parameter_string}'"
-    )
+    python_bin = BIN_DIR / 'python'
+
+    if trainer == 'local':
+        assert (num_hosts == slots_per_host == 1)
+        command = f'{venv_python} {TRAIN_SCRIPT} {parameter_string} local'
+    elif trainer == 'distributed':
+        command = (
+            f'mpirun --bind-to none --map-by slot '
+            f'-np {num_hosts * slots_per_host} '
+            f'--host {host_string} '
+            f'{venv_python} {TRAIN_SCRIPT} {parameter_string} distributed'
+        )
+    elif trainer == 'horovod':
+        horovodrun_bin = BIN_DIR / 'horovodrun'
+        command = (
+            f'{horovodrun_bin} '
+            f'-np {num_hosts * slots_per_host} '
+            f'--hosts {host_string} '
+            f'{venv_python} {TRAIN_SCRIPT} {parameter_string} horovod'
+        )
+    else:
+        raise ValueError(f'Invalid trainer: {trainer}')
 
     stdout, stderr, seconds = measure_time(connection, command)
     return command, stdout, stderr, seconds
@@ -115,20 +157,17 @@ def run_training(connection, configurations=None, result_filename=None):
     for run in configurations:
         command, stdout, stderr, seconds = run_training_configuration(
             connection=connection,
+            trainer=run['trainer'],
             parameters=run['parameters'],
             num_hosts=run['hosts'],
-            slots_per_host=run['slots'],
-            threads_per_slot=run['threads']
+            slots_per_host=run['slots']
         )
         results.append({
             'command': command,
             'stdout': stdout,
             'stderr': stderr,
             'seconds': seconds,
-            'batch_size': run['parameters']['--batch-size'],
-            'nodes': run['hosts'],
-            'processes_per_node': run['slots'],
-            'threads_per_process': run['threads']
+            'config': run
         })
         with open(result_filename, 'w') as f:
             json.dump({'results': results}, f)
@@ -136,9 +175,13 @@ def run_training(connection, configurations=None, result_filename=None):
 
 @task
 def run_debug(c):
-    run_training(c, configurations=[DEBUG_RUN], result_filename='results_debug.json')
+    run_training(
+        connection=c,
+        configurations=[DEBUG_RUN],
+        result_filename='results_debug.json'
+    )
 
 
 @task
 def run_all(c):
-    run_training(c)
+    run_training(connection=c)
