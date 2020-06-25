@@ -25,18 +25,13 @@ def create_parser(sub_parser, name, trainer_class):
 def train(args, trainer):
     logging.getLogger().setLevel(args.log)
 
-    dataset = MotionDataset.load(args.dataset_path,
-                                 output_path=args.output_path, test=False)
-    training_set, validation_set = dataset.random_split(
-        validation_fraction=args.validation_fraction)
-    test_set = MotionDataset.load(args.dataset_path,
-                                  output_path=args.output_path, test=True)
+    training_set, validation_set, test_set = MotionDataset.load(args.dataset_path, output_path=args.output_path)
     logging.info(f'Training set of size {len(training_set)}')
     logging.info(f'Validation set of size {len(validation_set)}')
     logging.info(f'Test set of size {len(test_set)}')
 
     model = MotionModel(
-        input_dim=dataset.num_features,
+        input_dim=training_set.num_features,
         hidden_dim=args.hidden_units,
         layer_dim=args.stacked_layer,
         output_dim=len(MotionDataset.LABELS),

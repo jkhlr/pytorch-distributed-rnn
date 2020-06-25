@@ -49,11 +49,7 @@ def execute(args):
         processes.append(p)
     else:
         torch.set_num_threads(args.num_threads)
-        data_set = dataset.MotionDataset.load(args.dataset_path, output_path=args.output_path, test=False)
-        test_set = dataset.MotionDataset.load(args.dataset_path, output_path=args.output_path, test=True)
-
-        # Get data to train on
-        training_set, validation_set = data_set.random_split(validation_fraction=args.validation_fraction)
+        training_set, validation_set, test_set = dataset.MotionDataset.load(args.dataset_path, output_path=args.output_path)
         # start training worker on this node
         p = mp.Process(
             target=run_worker,
@@ -63,7 +59,7 @@ def execute(args):
                 args.epochs,
                 args.batch_size,
                 args.learning_rate,
-                data_set.num_features,
+                training_set.num_features,
                 args.hidden_units,
                 args.stacked_layer,
                 len(dataset.MotionDataset.LABELS),
