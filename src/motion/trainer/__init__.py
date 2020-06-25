@@ -7,6 +7,9 @@ from trainer.base import Trainer
 from trainer.ddp import DDPTrainer
 from trainer.horovod import HorovodTrainer
 
+trained_model, train_history, validation_history, duration = None, None, \
+                                                             None, None
+
 
 def add_sub_commands(sub_parser):
     create_parser(sub_parser, 'local', Trainer)
@@ -22,9 +25,12 @@ def create_parser(sub_parser, name, trainer_class):
 def train(args, trainer):
     logging.getLogger().setLevel(args.log)
 
-    dataset = MotionDataset.load(args.dataset_path, output_path=args.output_path, test=False)
-    training_set, validation_set = dataset.random_split(validation_fraction=args.validation_fraction)
-    test_set = MotionDataset.load(args.dataset_path, output_path=args.output_path, test=True)
+    dataset = MotionDataset.load(args.dataset_path,
+                                 output_path=args.output_path, test=False)
+    training_set, validation_set = dataset.random_split(
+        validation_fraction=args.validation_fraction)
+    test_set = MotionDataset.load(args.dataset_path,
+                                  output_path=args.output_path, test=True)
     logging.info(f'Training set of size {len(training_set)}')
     logging.info(f'Validation set of size {len(validation_set)}')
     logging.info(f'Test set of size {len(test_set)}')
@@ -48,7 +54,8 @@ def train(args, trainer):
     trainer = trainer(**trainer_args)
 
     logging.info(f'Training model for {args.epochs} epochs...')
-    trained_model, train_history, validation_history = trainer.train(epochs=args.epochs)
-    history = {'train_history': train_history, 'validation_history': validation_history}
+    _, train_history, validation_history = trainer.train(epochs=args.epochs)
+    history = {'train_history': train_history,
+               'validation_history': validation_history}
     with open('history.json', 'w') as file:
         json.dump(history, file)

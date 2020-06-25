@@ -1,23 +1,22 @@
 import json
-import time
 from pathlib import Path
 
 from fabric import task
 from patchwork.transfers import rsync
 
-MASTER = '192.168.2.15'
+MASTER = '10.42.0.50'
 SLAVES = [
-    '192.168.2.2',
-    '192.168.2.3',
-    '192.168.2.4',
-    '192.168.2.5',
-    '192.168.2.6',
-    '192.168.2.7',
-    '192.168.2.8',
-    '192.168.2.9',
-    '192.168.2.10',
-    '192.168.2.11',
-    '192.168.2.12'
+    '10.42.0.29',
+    '10.42.0.105',
+    '10.42.0.56',
+    '10.42.0.180',
+    '10.42.0.235',
+    '10.42.0.244',
+    '10.42.0.239',
+    '10.42.0.191',
+    '10.42.0.41',
+    '10.42.0.190',
+    '10.42.0.69'
 ]
 
 WORK_DIR = Path('~/susml/jakob_torben')
@@ -33,30 +32,29 @@ TRAIN_RUNS = [
         'hosts': num_hosts,
         'slots': num_slots,
         'parameters': {
-            '--stacked-layer': 1,
+            '--batch-size': 1500 // (num_hosts * num_slots),
+            '--epochs': 10,
+            '--stacked-layer': 2,
             '--hidden-units': 32,
-            '--dropout': 0,
-            '--batch-size': batch_size,
-            '--epochs': 6
+            '--dropout': 0.3
         }
     }
-    for batch_size in [32, 64, 128, 256]
-    for num_slots in [1, 2, 3, 4]
-    for num_hosts in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    for num_slots in [1, 2, 4]
+    for num_hosts in [1, 2, 4, 8, 12]
     for trainer in ['local', 'distributed', 'horovod']
     if trainer != 'local' or num_hosts == num_slots == 1
 ]
 
 DEBUG_RUN = {
     'trainer': 'distributed',
-    'hosts': 2,
+    'hosts': 12,
     'slots': 1,
     'parameters': {
-        '--stacked-layer': 1,
+        '--batch-size': 1500,
+        '--epochs': 1,
+        '--stacked-layer': 2,
         '--hidden-units': 32,
-        '--dropout': 0,
-        '--batch-size': 32,
-        '--epochs': 6
+        '--dropout': 0.3
     }
 }
 
@@ -83,20 +81,28 @@ def copy_src(c):
     dest_path = str(SRC_DIR)
 
     c.run(f'mkdir -p {dest_path}')
-    rsync(c, source_path, dest_path, delete=True)
+    rsync(c, source_path, dest_path, delete=True,
+          ssh_opts="-i ~/.ssh/pi_cluster -o StrictHostKeyChecking=no")
 
 
 @task
 def install_wheels(c):
     # keep trailing slash to copy contents of source_path into dest_path
-    source_path = '/path/to/wheels/'
+    source_path = './wheels/'
     dest_path = '/tmp/wheels'
 
     c.run(f'mkdir -p {dest_path}')
-    rsync(c, source_path, dest_path, delete=True)
+    rsync(c, source_path, dest_path, delete=True,
+          ssh_opts="-i ~/.ssh/pi_cluster -o StrictHostKeyChecking=no")
 
     pip_bin = BIN_DIR / 'pip'
     c.run(f'{pip_bin} install {dest_path}/*.whl')
+
+
+@task
+def install_profiler(c):
+    pip_bin = BIN_DIR / 'pip'
+    c.run(f'{pip_bin} install memory_profiler')
 
 
 def run_training_configuration(
@@ -119,35 +125,29 @@ def run_training_configuration(
 
     if trainer == 'local':
         assert (num_hosts == slots_per_host == 1)
-        command = f'{venv_python} {TRAIN_SCRIPT} {parameter_string} local'
+        command = f'{python_bin} {TRAIN_SCRIPT} {parameter_string} local'
     elif trainer == 'distributed':
         command = (
-            f'mpirun --bind-to none --map-by slot '
+            'mpirun --bind-to none --map-by slot '
             f'-np {num_hosts * slots_per_host} '
             f'--host {host_string} '
-            f'{venv_python} {TRAIN_SCRIPT} {parameter_string} distributed'
+            f'{python_bin} {TRAIN_SCRIPT} {parameter_string} distributed'
         )
     elif trainer == 'horovod':
-        horovodrun_bin = BIN_DIR / 'horovodrun'
         command = (
-            f'{horovodrun_bin} '
+            'mpirun --bind-to none --map-by slot '
+            '-x NCCL_DEBUG=INFO -x LD_LIBRARY_PATH -x PATH '
+            '-mca pml ob1 -mca btl ^openib '
             f'-np {num_hosts * slots_per_host} '
-            f'--hosts {host_string} '
-            f'{venv_python} {TRAIN_SCRIPT} {parameter_string} horovod'
+            f'--host {host_string} '
+            f'{python_bin} {TRAIN_SCRIPT} {parameter_string} horovod'
         )
     else:
         raise ValueError(f'Invalid trainer: {trainer}')
 
-    stdout, stderr, seconds = measure_time(connection, command)
-    return command, stdout, stderr, seconds
-
-
-def measure_time(connection, command):
-    start_time = time.time()
+    print(command)
     result = connection.run(command)
-    end_time = time.time()
-    execution_seconds = end_time - start_time
-    return result.stdout, result.stderr, execution_seconds
+    return command, result.stdout, result.stderr
 
 
 def run_training(connection, configurations=None, result_filename=None):
@@ -155,7 +155,7 @@ def run_training(connection, configurations=None, result_filename=None):
     configurations = configurations or TRAIN_RUNS
     results = []
     for run in configurations:
-        command, stdout, stderr, seconds = run_training_configuration(
+        command, stdout, stderr = run_training_configuration(
             connection=connection,
             trainer=run['trainer'],
             parameters=run['parameters'],
@@ -166,7 +166,6 @@ def run_training(connection, configurations=None, result_filename=None):
             'command': command,
             'stdout': stdout,
             'stderr': stderr,
-            'seconds': seconds,
             'config': run
         })
         with open(result_filename, 'w') as f:

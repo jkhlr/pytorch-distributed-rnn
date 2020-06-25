@@ -1,5 +1,8 @@
 import logging
+import time
+
 import torch
+from memory_profiler import memory_usage
 from torch import save
 from torch.nn import CrossEntropyLoss
 from torch.optim import Adam
@@ -11,20 +14,28 @@ from trainer.formatter import TrainingMessageFormatter
 class Trainer:
     loss_fn = CrossEntropyLoss()
 
-    def __init__(self, model, training_set, batch_size, learning_rate, validation_set=None, test_set=None,
+    def __init__(self, model, training_set, batch_size, learning_rate,
+                 validation_set=None, test_set=None,
                  checkpoint_dir=None, sampler=None):
         self.model = model
         self.checkpoint_dir = checkpoint_dir
         self.sampler = sampler
-        self.train_loader = self._get_data_loader(training_set, batch_size=batch_size, sampler=sampler)
-        self.validation_loader = self._get_data_loader(validation_set, batch_size=batch_size, shuffle=False)
-        self.test_loader = self._get_data_loader(test_set, batch_size=batch_size, shuffle=False)
+        self.train_loader = self._get_data_loader(training_set,
+                                                  batch_size=batch_size,
+                                                  sampler=sampler)
+        self.validation_loader = self._get_data_loader(validation_set,
+                                                       batch_size=batch_size,
+                                                       shuffle=False)
+        self.test_loader = self._get_data_loader(test_set,
+                                                 batch_size=batch_size,
+                                                 shuffle=False)
         self.optimizer = self._get_optimizer(model, learning_rate)
 
     def _get_optimizer(self, model, lr):
         return Adam(model.parameters(), lr=lr)
 
-    def _get_data_loader(self, dataset, batch_size=1, shuffle=True, sampler=None):
+    def _get_data_loader(self, dataset, batch_size=1, shuffle=True,
+                         sampler=None):
         if dataset is None:
             return None
         return DataLoader(
@@ -38,33 +49,40 @@ class Trainer:
         return TrainingMessageFormatter(epochs)
 
     def train(self, epochs):
-        formatter = self._get_formatter(epochs)
         training_history = []
         validation_history = []
-        best_loss = None
+        formatter = self._get_formatter(epochs)
 
-        for epoch in range(epochs):
-            if self.sampler is not None:
-                self.sampler.set_epoch(epoch)
-            logging.info(formatter.epoch_start_message(epoch))
-            train_loss, train_acc = self._train_step(formatter)
-            training_history.append(train_loss)
+        def train_inner():
+            best_loss = None
 
-            if self.validation_loader is not None:
-                validation_loss, val_acc = self._evaluate(
-                    self.validation_loader,
-                    formatter,
-                    epoch
-                )
-                validation_history.append(validation_loss)
+            for epoch in range(epochs):
+                if self.sampler is not None:
+                    self.sampler.set_epoch(epoch)
+                logging.info(formatter.epoch_start_message(epoch))
+                train_loss, train_acc = self._train_step(formatter)
+                training_history.append(train_loss)
 
-                if best_loss is None or best_loss > validation_loss:
-                    logging.info(f"New best model in epoch {epoch + 1}")
-                    best_loss = validation_loss
-                    self._save_checkpoint(epoch, validation_loss, best=True)
+                if self.validation_loader is not None:
+                    validation_loss, val_acc = self._evaluate(
+                        self.validation_loader,
+                        formatter,
+                        epoch
+                    )
+                    validation_history.append(validation_loss)
 
-            if epoch % 10 == 0 or epoch == epochs - 1:
-                self._save_checkpoint(epoch, train_loss)
+                    if best_loss is None or best_loss > validation_loss:
+                        logging.info(f"New best model in epoch {epoch + 1}")
+                        best_loss = validation_loss
+                        self._save_checkpoint(epoch, validation_loss, best=True)
+
+                # if epoch % 10 == 0 or epoch == epochs - 1:
+                #     self._save_checkpoint(epoch, train_loss)
+
+        start = time.perf_counter()
+        memory = max(memory_usage((train_inner, tuple(), {})))
+        duration = time.perf_counter() - start
+        logging.info(formatter.performance_message(memory, duration))
 
         if self.test_loader is not None:
             self._evaluate(self.test_loader, formatter)
@@ -110,7 +128,9 @@ class Trainer:
                 labels = labels.long().squeeze(1)
                 eval_loss += self.loss_fn(output, labels).item()
                 total_correct += (torch.argmax(output, dim=1) == labels).sum()
-                logging.debug(f"Model predicted {torch.argmax(output, dim=1).data}; Correct was {labels.data}")
+                logging.debug(
+                    f"Model predicted {torch.argmax(output, dim=1).data}; "
+                    f"Correct was {labels.data}")
 
         eval_loss /= len(data_loader)
         num_examples = len(data_loader.dataset)
