@@ -56,11 +56,17 @@ class MotionDataset(data.Dataset):
         logging.info("No processed data found. Preprocess raw data...")
         processor = MotionDataProcessor()
         (X_train, y_train), (X_test, y_test) = processor.process_data(base_path)
-        training_set, validation_set = MotionDataset(X_train, X_test).random_split(validation_fraction)
-        torch.save(training_set.features, output_path / "X_train.pt")
-        torch.save(training_set.labels, output_path / "y_train.pt")
-        torch.save(validation_set.labels, output_path / "X_validation.pt")
-        torch.save(validation_set.labels, output_path / "y_validation.pt")
+        dataset = MotionDataset(X_train, X_test)
+        training_set, validation_set = dataset.random_split(validation_fraction)
+        X_train = dataset.features[training_set.indices]
+        y_train = dataset.labels[training_set.indices]
+        X_validation = dataset.features[validation_set.indices]
+        y_validation = dataset.labels[validation_set.indices]
+
+        torch.save(X_train, output_path / "X_train.pt")
+        torch.save(y_train, output_path / "y_train.pt")
+        torch.save(X_validation, output_path / "X_validation.pt")
+        torch.save(y_validation, output_path / "y_validation.pt")
         torch.save(X_test, output_path / "X_test.pt")
         torch.save(y_test, output_path / "y_test.pt")
         return training_set, validation_set, cls(X_test, y_test)
