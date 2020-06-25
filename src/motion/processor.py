@@ -25,7 +25,7 @@ class MotionDataProcessor:
         "total_acc_z_"
     ]
 
-    def process_data(self, csv_path):
+    def process_data(self, csv_path, validation_fraction=0.05):
         """
         Loads motion sensor data from multiple text data and returns torch float tensors.
         The processing is based on https://github.com/guillaume-chevalier/LSTM-Human-Activity-Recognition/blob/master/LSTM.ipynb
@@ -52,7 +52,9 @@ class MotionDataProcessor:
         y_train = self._load_y(y_train_path)
         y_test = self._load_y(y_test_path)
 
-        return (X_train, y_train), (X_test, y_test)
+        train, valid = self._train_valid_split(X_train, y_train, validation_fraction)
+
+        return train, valid, (X_test, y_test)
 
     def _load_X(self, X_signals_paths):
         X_signals = []
@@ -82,3 +84,13 @@ class MotionDataProcessor:
 
         # Substract 1 to each output class for friendly 0-based indexing
         return torch.LongTensor(y_ - 1)
+
+    def _train_valid_split(self, features, labels, validation_fraction):
+        num_examples = features.shape[0]
+        assert num_examples == labels.shape[0], "Feature and labels must have equal size"
+        indices = np.random.permutation(num_examples)
+        validation_examples = int(num_examples * validation_fraction)
+        valid_idx, train_idx = indices[:validation_examples], indices[validation_examples:]
+        X_train, X_valid = features[train_idx, :], features[valid_idx, :]
+        y_train, y_valid = labels[train_idx, :], labels[valid_idx, :]
+        return (X_train, y_train), (X_valid, y_valid)

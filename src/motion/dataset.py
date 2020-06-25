@@ -36,18 +36,18 @@ class MotionDataset(data.Dataset):
 
     @classmethod
     def load(cls, base_path, output_path=None, validation_fraction=0.05):
-        types = ["train, validation", "test"]
+        types = ["train", "validation", "test"]
         paths = [cls.get_data_path(base_path, type) for type in types]
         datasets = []
         for feature_path, label_path in paths:
             if cls.processed_data_exists([feature_path, label_path]):
-                logging.info("Preprocessed data found. Skip preprocessing.")
                 features = torch.load(feature_path)
                 labels = torch.load(label_path)
                 datasets.append(cls(features, labels))
 
         # return only if all three were found
         if len(datasets) == 3:
+            logging.info("Preprocessed data found. Skip preprocessing.")
             return datasets
 
         if output_path is None:
@@ -55,21 +55,14 @@ class MotionDataset(data.Dataset):
 
         logging.info("No processed data found. Preprocess raw data...")
         processor = MotionDataProcessor()
-        (X_train, y_train), (X_test, y_test) = processor.process_data(base_path)
-        dataset = MotionDataset(X_train, X_test)
-        training_set, validation_set = dataset.random_split(validation_fraction)
-        X_train = dataset.features[training_set.indices]
-        y_train = dataset.labels[training_set.indices]
-        X_validation = dataset.features[validation_set.indices]
-        y_validation = dataset.labels[validation_set.indices]
-
+        (X_train, y_train), (X_validation, y_validation), (X_test, y_test) = processor.process_data(base_path, validation_fraction)
         torch.save(X_train, output_path / "X_train.pt")
         torch.save(y_train, output_path / "y_train.pt")
         torch.save(X_validation, output_path / "X_validation.pt")
         torch.save(y_validation, output_path / "y_validation.pt")
         torch.save(X_test, output_path / "X_test.pt")
         torch.save(y_test, output_path / "y_test.pt")
-        return training_set, validation_set, cls(X_test, y_test)
+        return cls(X_train, y_train), cls(X_validation, y_validation), cls(X_test, y_test)
 
     @classmethod
     def processed_data_exists(cls, paths):
