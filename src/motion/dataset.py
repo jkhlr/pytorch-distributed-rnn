@@ -3,6 +3,7 @@ import logging
 import torch
 from torch.utils import data
 from torch.utils.data.dataset import random_split
+
 from processor import MotionDataProcessor
 
 
@@ -28,32 +29,41 @@ class MotionDataset(data.Dataset):
     def __len__(self):
         return len(self.features)
 
-    def random_split(self, validation_fraction=0.05):
+    def random_split(self, validation_fraction):
         validation_examples = int(len(self) * validation_fraction)
         training_examples = len(self) - validation_examples
         return random_split(self, [training_examples, validation_examples])
 
     @classmethod
-    def load(cls, base_path, test=False, output_path=None):
-        data_type = "test" if test else "train"
-        feature_path, label_path = cls.get_data_path(base_path, data_type)
-        if cls.processed_data_exists([feature_path, label_path]):
-            logging.info("Preprocessed data found. Skip preprocessing.")
-            features = torch.load(feature_path)
-            labels = torch.load(label_path)
-            return cls(features, labels)
+    def load(cls, base_path, output_path=None, validation_fraction=0.05):
+        types = ["train, validation", "test"]
+        paths = [cls.get_data_path(base_path, type) for type in types]
+        datasets = []
+        for feature_path, label_path in paths:
+            if cls.processed_data_exists([feature_path, label_path]):
+                logging.info("Preprocessed data found. Skip preprocessing.")
+                features = torch.load(feature_path)
+                labels = torch.load(label_path)
+                datasets.append(cls(features, labels))
+
+        # return only if all three were found
+        if len(datasets) == 3:
+            return datasets
 
         if output_path is None:
             output_path = base_path
+
         logging.info("No processed data found. Preprocess raw data...")
         processor = MotionDataProcessor()
         (X_train, y_train), (X_test, y_test) = processor.process_data(base_path)
-        torch.save(X_train, output_path / "X_train.pt")
-        torch.save(y_train, output_path / "y_train.pt")
+        training_set, validation_set = MotionDataset(X_train, X_test).random_split(validation_fraction)
+        torch.save(training_set.features, output_path / "X_train.pt")
+        torch.save(training_set.labels, output_path / "y_train.pt")
+        torch.save(validation_set.labels, output_path / "X_validation.pt")
+        torch.save(validation_set.labels, output_path / "y_validation.pt")
         torch.save(X_test, output_path / "X_test.pt")
         torch.save(y_test, output_path / "y_test.pt")
-        (features, labels) = (X_test, y_test) if test else (X_train, y_train)
-        return cls(features, labels)
+        return training_set, validation_set, cls(X_test, y_test)
 
     @classmethod
     def processed_data_exists(cls, paths):
