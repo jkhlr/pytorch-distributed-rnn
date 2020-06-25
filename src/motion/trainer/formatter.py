@@ -23,6 +23,9 @@ class TrainingMessageFormatter:
                 .format(epoch, self.num_epochs, percentage(epoch, self.num_epochs))
         return prefix + metrics
 
+    def performance_message(self, memory, duration):
+        return f'{self.rank}: Memory Usage: {memory}, Training Duration: {duration}'
+
 
 def percentage(current, overall):
     return 100. * (current / overall)

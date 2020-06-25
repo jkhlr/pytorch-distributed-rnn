@@ -1,4 +1,5 @@
 import argparse
+import sys
 from pathlib import Path
 
 import param_server
@@ -34,4 +35,5 @@ def main():
 
 
 if __name__ == '__main__':
+    sys.dont_write_bytecode = True
     main()
