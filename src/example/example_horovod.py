@@ -51,7 +51,6 @@ def run(rank, world_size):
         optim.SGD(model.parameters(), lr=0.001),
         named_parameters=model.named_parameters()
     )
-    optimizer.zero_grad()
 
     dataset = ToyDataset(size=24)
     batch_size = 12 // world_size
@@ -62,6 +61,7 @@ def run(rank, world_size):
     )
 
     for inputs, labels in loader:
+        optimizer.zero_grad()
         print('rank', rank, 'inputs:', inputs.sum())
         outputs = model(inputs)
         print('rank', rank, 'labels:', labels.sum())

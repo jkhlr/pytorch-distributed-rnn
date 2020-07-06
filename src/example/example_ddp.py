@@ -63,6 +63,7 @@ def run(rank, world_size):
     )
 
     for inputs, labels in loader:
+        optimizer.zero_grad()
         print(
             'rank', rank,
             'grad:', optimizer.param_groups[0]['params'][0].grad.sum()
@@ -75,7 +76,6 @@ def run(rank, world_size):
         # backward pass
         loss = loss_fn(outputs, labels)
         print('rank', rank, 'loss:', loss.item())
-        optimizer.zero_grad()
         loss.backward()
         # update parameters
 
