@@ -1,10 +1,9 @@
 #!/usr/bin/env python
+import horovod.torch as hvd
 import numpy as np
 import torch
-import torch.distributed as dist
 import torch.nn as nn
 import torch.optim as optim
-from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import Dataset, DataLoader, DistributedSampler
 
 
@@ -34,24 +33,24 @@ class ToyDataset(Dataset):
 
 def run(rank, world_size):
     # create local model
-    torch.manual_seed(0)
-    np.random.seed(0)
     model = ToyModel()
     print(
-        'rank', rank,
+        'rank ', rank,
         'initial:',
         sum(parameter.sum() for parameter in model.parameters())
     )
-    # construct DDP model
-    ddp_model = DDP(model)
+    hvd.broadcast_parameters(model.state_dict(), root_rank=0)
     print(
         'rank', rank,
         'synced:',
-        sum(parameter.sum() for parameter in ddp_model.parameters())
+        sum(parameter.sum() for parameter in model.parameters())
     )
     # define loss function and optimizer
     loss_fn = nn.MSELoss()
-    optimizer = optim.SGD(ddp_model.parameters(), lr=0.001)
+    optimizer = hvd.DistributedOptimizer(
+        optim.SGD(model.parameters(), lr=0.001),
+        named_parameters=model.named_parameters()
+    )
     optimizer.zero_grad()
 
     dataset = ToyDataset(size=24)
@@ -59,41 +58,26 @@ def run(rank, world_size):
     loader = DataLoader(
         dataset=dataset,
         batch_size=batch_size,
-        #sampler=DistributedSampler(dataset, world_size, rank, shuffle=False)
+        sampler=DistributedSampler(dataset, world_size, rank)
     )
 
     for inputs, labels in loader:
-        print(
-            'rank', rank,
-            'grad:', optimizer.param_groups[0]['params'][0].grad.sum()
-            if optimizer.param_groups[0]['params'][0].grad is not None else None
-        )
-        # print('rank', rank, 'inputs:', inputs.sum())
-        outputs = ddp_model(inputs)
-        # print('rank', rank, 'labels:', labels.sum())
-        print('rank', rank, 'batch:', inputs.sum() + labels.sum())
+        print('rank', rank, 'inputs:', inputs.sum())
+        outputs = model(inputs)
+        print('rank', rank, 'labels:', labels.sum())
         # backward pass
-        loss = loss_fn(outputs, labels)
-        print('rank', rank, 'loss:', loss.item())
-        optimizer.zero_grad()
-        loss.backward()
+        loss_fn(outputs, labels).backward()
         # update parameters
-
         optimizer.step()
         print(
             'rank', rank,
             'parameters:',
-            sum(parameter.sum() for parameter in ddp_model.parameters())
-        )
-        print(
-            'rank', rank,
-            'grad:', optimizer.param_groups[0]['params'][0].grad.sum()
-            if optimizer.param_groups[0]['params'][0].grad is not None else None
+            sum(parameter.sum() for parameter in model.parameters())
         )
 
 
 if __name__ == "__main__":
-    torch.manual_seed(0)
     np.random.seed(0)
-    dist.init_process_group('mpi')
-    run(dist.get_rank(), dist.get_world_size())
+    torch.manual_seed(0)
+    hvd.init()
+    run(hvd.rank(), hvd.size())

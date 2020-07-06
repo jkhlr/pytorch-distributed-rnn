@@ -2,4 +2,7 @@ ipython==7.14.0
 pandas==1.0.3
 scikit-learn==0.23.0
 torch==1.4.0
-horovod==0.19.4
+horovod==0.19.5
+numpy==1.18.5
+ray[dashboard]==0.8.6
+memory_profiler==0.57.0

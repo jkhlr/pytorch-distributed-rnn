@@ -4,8 +4,8 @@ from pathlib import Path
 from fabric import task
 from patchwork.transfers import rsync
 
-MASTER = '10.42.0.50'
-SLAVES = [
+HOSTS = [
+    '10.42.0.50',
     '10.42.0.29',
     '10.42.0.105',
     '10.42.0.56',
@@ -18,6 +18,19 @@ SLAVES = [
     '10.42.0.190',
     '10.42.0.69'
 ]
+
+DEBUG_RUN = {
+    'trainer': 'distributed',
+    'hosts': 12,
+    'slots': 1,
+    'parameters': {
+        '--batch-size': 1500,
+        '--epochs': 1,
+        '--stacked-layer': 2,
+        '--hidden-units': 32,
+        '--dropout': 0.3
+    }
+}
 
 WORK_DIR = Path('~/susml/jakob_torben')
 BIN_DIR = WORK_DIR / 'bin'
@@ -45,23 +58,10 @@ TRAIN_RUNS = [
     if trainer != 'local' or num_hosts == num_slots == 1
 ]
 
-DEBUG_RUN = {
-    'trainer': 'distributed',
-    'hosts': 12,
-    'slots': 1,
-    'parameters': {
-        '--batch-size': 1500,
-        '--epochs': 1,
-        '--stacked-layer': 2,
-        '--hidden-units': 32,
-        '--dropout': 0.3
-    }
-}
-
 
 @task
 def prepare_connections(c):
-    keyscan_command = f'ssh-keyscan {" ".join(SLAVES)}'
+    keyscan_command = f'ssh-keyscan {" ".join(HOSTS)}'
     known_hosts_file = '~/.ssh/known_hosts'
 
     new_entries = c.run(keyscan_command).stdout
@@ -69,9 +69,9 @@ def prepare_connections(c):
     if new_entries not in existing_entries:
         c.run(f'{keyscan_command} >> {known_hosts_file}')
 
-    hostnames = c.run(f'mpirun --host {",".join(SLAVES)} hostname').stdout
+    hostnames = c.run(f'mpirun --host {",".join(HOSTS)} hostname').stdout
     if not all(hostname == result for hostname, result in
-               zip(SLAVES, hostnames.splitlines())):
+               zip(HOSTS, hostnames.splitlines())):
         raise ValueError("Can't connect to slaves")
 
 
@@ -110,37 +110,46 @@ def run_training_configuration(
         trainer,
         parameters,
         num_hosts,
-        slots_per_host
+        slots_per_host,
+        hosts,
+        bin_dir,
+        train_script
 ):
     host_string = ','.join(
         f'{address}:{slots_per_host}'
-        for address in ([MASTER] + SLAVES)[:num_hosts]
+        for address in hosts[:num_hosts]
     )
     parameter_string = ' '.join(
         f'{name} {value}'
         for name, value
         in parameters.items()
     )
-    python_bin = BIN_DIR / 'python'
+    python_bin = Path(bin_dir) / 'python'
 
     if trainer == 'local':
         assert (num_hosts == slots_per_host == 1)
-        command = f'{python_bin} {TRAIN_SCRIPT} {parameter_string} local'
+        command = f'{python_bin} {train_script} {parameter_string} local'
     elif trainer == 'distributed':
         command = (
             'mpirun --bind-to none --map-by slot '
             f'-np {num_hosts * slots_per_host} '
             f'--host {host_string} '
-            f'{python_bin} {TRAIN_SCRIPT} {parameter_string} distributed'
+            f'{python_bin} {train_script} {parameter_string} distributed'
         )
     elif trainer == 'horovod':
+        # command = (
+        #     'mpirun --bind-to none --map-by slot '
+        #     '-x NCCL_DEBUG=INFO -x LD_LIBRARY_PATH -x PATH '
+        #     '-mca pml ob1 -mca btl ^openib '
+        #     f'-np {num_hosts * slots_per_host} '
+        #     f'--host {host_string} '
+        #     f'{python_bin} {train_script} {parameter_string} horovod'
+        # )
         command = (
-            'mpirun --bind-to none --map-by slot '
-            '-x NCCL_DEBUG=INFO -x LD_LIBRARY_PATH -x PATH '
-            '-mca pml ob1 -mca btl ^openib '
+            'horovodrun '
             f'-np {num_hosts * slots_per_host} '
-            f'--host {host_string} '
-            f'{python_bin} {TRAIN_SCRIPT} {parameter_string} horovod'
+            f'--hosts {host_string} '
+            f'{python_bin} {train_script} {parameter_string} horovod'
         )
     else:
         raise ValueError(f'Invalid trainer: {trainer}')
@@ -150,9 +159,19 @@ def run_training_configuration(
     return command, result.stdout, result.stderr
 
 
-def run_training(connection, configurations=None, result_filename=None):
-    result_filename = result_filename or RESULT_FILE
+def run_training(
+        connection,
+        hosts=None,
+        bin_dir=None,
+        train_script=None,
+        configurations=None,
+        result_filename=None
+):
+    hosts = hosts or HOSTS
+    bin_dir = bin_dir or BIN_DIR
+    train_script = train_script or TRAIN_SCRIPT
     configurations = configurations or TRAIN_RUNS
+    result_filename = result_filename or RESULT_FILE
     results = []
     for run in configurations:
         command, stdout, stderr = run_training_configuration(
@@ -160,7 +179,10 @@ def run_training(connection, configurations=None, result_filename=None):
             trainer=run['trainer'],
             parameters=run['parameters'],
             num_hosts=run['hosts'],
-            slots_per_host=run['slots']
+            slots_per_host=run['slots'],
+            hosts=hosts,
+            bin_dir=bin_dir,
+            train_script=train_script
         )
         results.append({
             'command': command,
@@ -173,14 +195,44 @@ def run_training(connection, configurations=None, result_filename=None):
 
 
 @task
+def run_all(c):
+    run_training(connection=c, hosts=HOSTS)
+
+
+@task
 def run_debug(c):
     run_training(
         connection=c,
+        hosts=HOSTS,
         configurations=[DEBUG_RUN],
         result_filename='results_debug.json'
     )
 
 
 @task
-def run_all(c):
-    run_training(connection=c)
+def run_debug_docker(c):
+    docker_debug_run = {
+        'trainer': 'horovod',
+        'hosts': 2,
+        'slots': 1,
+        'parameters': {
+            '--batch-size': 1500,
+            '--epochs': 1,
+            '--stacked-layer': 2,
+            '--hidden-units': 32,
+            '--dropout': 0.3
+        }
+    }
+    hosts = ['master', 'slave']
+    bin_dir = '/usr/local/bin'
+    train_script = f'~/src/{DATASET}/main.py'
+    result_filename = 'results_debug.json'
+
+    run_training(
+        connection=c,
+        hosts=hosts,
+        bin_dir=bin_dir,
+        train_script=train_script,
+        configurations=[docker_debug_run],
+        result_filename=result_filename
+    )

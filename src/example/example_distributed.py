@@ -1,8 +1,7 @@
 #!/usr/bin/env python
-import os
 import torch
 import torch.distributed as dist
-from torch.multiprocessing import Process
+
 
 def run(rank, size):
     tensor = torch.zeros(1)
@@ -14,6 +13,7 @@ def run(rank, size):
         # Receive tensor from process 0
         dist.recv(tensor=tensor, src=0)
     print('Rank ', rank, ' has data ', tensor[0])
+
 
 def init_process(fn, backend='mpi'):
     dist.init_process_group(backend)
