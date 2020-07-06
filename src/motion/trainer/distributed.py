@@ -20,12 +20,14 @@ class DistributedTrainer(Trainer):
         sampler = DistributedSampler(
             training_set,
             num_replicas=world_size,
-            rank=rank,
-            shuffle=True
+            rank=rank
         )
         if rank != 0:
             test_set = None
             validation_set = None
+
+        self.rank = rank
+        self.world_size = world_size
 
         super().__init__(
             model=model,
@@ -38,7 +40,13 @@ class DistributedTrainer(Trainer):
             sampler=sampler
         )
 
-        self.rank = rank
+    def _get_data_loader(self, dataset, batch_size, shuffle=True, sampler=None):
+        return super()._get_data_loader(
+            dataset,
+            batch_size // self.world_size,
+            shuffle=shuffle,
+            sampler=sampler
+        )
 
     def _get_formatter(self, epochs):
         return TrainingMessageFormatter(epochs, self.rank)

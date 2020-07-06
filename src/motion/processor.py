@@ -27,8 +27,11 @@ class MotionDataProcessor:
 
     def process_data(self, csv_path, validation_fraction=0.05):
         """
-        Loads motion sensor data from multiple text data and returns torch float tensors.
-        The processing is based on https://github.com/guillaume-chevalier/LSTM-Human-Activity-Recognition/blob/master/LSTM.ipynb
+        Loads motion sensor data from multiple text data and returns torch
+        float tensors.
+        The processing is based on
+        https://github.com/guillaume-chevalier/LSTM-Human-Activity
+        -Recognition/blob/master/LSTM.ipynb
 
         :param csv_path: base path of the dataset
         :return: a training and test pair of features and labels
@@ -37,10 +40,12 @@ class MotionDataProcessor:
             csv_path = Path(csv_path)
 
         X_train_signals_paths = [
-            csv_path / self.TRAIN / "Inertial Signals/" / (signal + "train.txt") for signal in self.INPUT_SIGNAL_TYPES
+            csv_path / self.TRAIN / "Inertial Signals/" / (signal + "train.txt")
+            for signal in self.INPUT_SIGNAL_TYPES
         ]
         X_test_signals_paths = [
-            csv_path / self.TEST / "Inertial Signals/" / (signal + "test.txt") for signal in self.INPUT_SIGNAL_TYPES
+            csv_path / self.TEST / "Inertial Signals/" / (signal + "test.txt")
+            for signal in self.INPUT_SIGNAL_TYPES
         ]
 
         X_train = self._load_X(X_train_signals_paths)
@@ -52,9 +57,25 @@ class MotionDataProcessor:
         y_train = self._load_y(y_train_path)
         y_test = self._load_y(y_test_path)
 
-        train, valid = self._train_valid_split(X_train, y_train, validation_fraction)
+        train, valid = self._train_valid_split(X_train, y_train,
+                                               validation_fraction)
+        train_features, train_labels = train
+        # To have reproducible training results 1, 2, 4, 8, and 12 nodes,
+        # with 1, 2 and 4 nodes, the number of training samples needs to be a
+        # multiple 96
+        num_train_samples = (len(train_features) // 96) * 96
 
-        return train, valid, (X_test, y_test)
+        return (
+            (
+                train_features[:num_train_samples],
+                train_labels[:num_train_samples]
+            ),
+            valid,
+            (
+                X_test,
+                y_test
+            )
+        )
 
     def _load_X(self, X_signals_paths):
         X_signals = []
@@ -87,10 +108,12 @@ class MotionDataProcessor:
 
     def _train_valid_split(self, features, labels, validation_fraction):
         num_examples = features.shape[0]
-        assert num_examples == labels.shape[0], "Feature and labels must have equal size"
+        assert num_examples == labels.shape[
+            0], "Feature and labels must have equal size"
         indices = np.random.permutation(num_examples)
         validation_examples = int(num_examples * validation_fraction)
-        valid_idx, train_idx = indices[:validation_examples], indices[validation_examples:]
+        valid_idx, train_idx = indices[:validation_examples], indices[
+                                                              validation_examples:]
         X_train, X_valid = features[train_idx, :], features[valid_idx, :]
         y_train, y_valid = labels[train_idx, :], labels[valid_idx, :]
         return (X_train, y_train), (X_valid, y_valid)

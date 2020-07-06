@@ -7,10 +7,6 @@ from trainer.base import Trainer
 from trainer.ddp import DDPTrainer
 from trainer.horovod import HorovodTrainer
 
-trained_model, train_history, validation_history, duration = None, None, \
-                                                             None, None
-
-
 def add_sub_commands(sub_parser):
     create_parser(sub_parser, 'local', Trainer)
     create_parser(sub_parser, 'distributed', DDPTrainer)
@@ -25,7 +21,10 @@ def create_parser(sub_parser, name, trainer_class):
 def train(args, trainer):
     logging.getLogger().setLevel(args.log)
 
-    training_set, validation_set, test_set = MotionDataset.load(args.dataset_path, output_path=args.output_path)
+    training_set, validation_set, test_set = MotionDataset.load(
+        args.dataset_path,
+        output_path=args.output_path
+    )
     logging.info(f'Training set of size {len(training_set)}')
     logging.info(f'Validation set of size {len(validation_set)}')
     logging.info(f'Test set of size {len(test_set)}')

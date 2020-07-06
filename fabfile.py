@@ -24,11 +24,12 @@ DEBUG_RUN = {
     'hosts': 12,
     'slots': 1,
     'parameters': {
-        '--batch-size': 1500,
+        '--batch-size': 1440,
         '--epochs': 1,
         '--stacked-layer': 2,
         '--hidden-units': 32,
-        '--dropout': 0.3
+        '--dropout': 0.3,
+        '--seed': 123456789
     }
 }
 
@@ -45,11 +46,14 @@ TRAIN_RUNS = [
         'hosts': num_hosts,
         'slots': num_slots,
         'parameters': {
-            '--batch-size': 1500 // (num_hosts * num_slots),
+            # Should be a multiple of 96, to make training on
+            # 1, 2, 4, 8, and 12 nodes with 1, 2 and 4 slots reproducible
+            '--batch-size': 1440,
             '--epochs': 10,
             '--stacked-layer': 2,
             '--hidden-units': 32,
-            '--dropout': 0.3
+            '--dropout': 0.3,
+            '--seed': 123456789
         }
     }
     for num_slots in [1, 2, 4]
@@ -212,15 +216,16 @@ def run_debug(c):
 @task
 def run_debug_docker(c):
     docker_debug_run = {
-        'trainer': 'horovod',
+        'trainer': 'distributed',
         'hosts': 2,
         'slots': 1,
         'parameters': {
-            '--batch-size': 1500,
+            '--batch-size': 1440,
             '--epochs': 1,
             '--stacked-layer': 2,
             '--hidden-units': 32,
-            '--dropout': 0.3
+            '--dropout': 0.3,
+            '--seed': 123456789
         }
     }
     hosts = ['master', 'slave']

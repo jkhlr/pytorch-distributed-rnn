@@ -2,6 +2,8 @@ import argparse
 import sys
 from pathlib import Path
 
+import torch
+
 import param_server
 import trainer
 
@@ -19,18 +21,24 @@ def main():
     parser.add_argument('--hidden-units', default=128, type=int)
     parser.add_argument('--epochs', default=100, type=int)
     parser.add_argument('--validation-fraction', default=0.1, type=float)
-    parser.add_argument('--batch-size', default=256, type=int)
+    parser.add_argument('--batch-size', default=240, type=int)
     parser.add_argument('--learning-rate', default=0.0025, type=float)
     parser.add_argument('--dropout', default=0.3, type=float)
     parser.add_argument('--log', default='INFO')
     parser.add_argument('--num-threads', default=4, type=int)
+    parser.add_argument('--seed', default=None, type=int)
 
     sub_parser = parser.add_subparsers(title='Available commands', metavar='command [options ...]')
+    sub_parser.required = True
 
     param_server.add_sub_command(sub_parser)
     trainer.add_sub_commands(sub_parser)
 
     args = parser.parse_args()
+
+    if args.seed is not None:
+        torch.manual_seed(args.seed)
+
     args.func(args)
 
 

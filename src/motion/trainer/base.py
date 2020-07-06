@@ -20,22 +20,27 @@ class Trainer:
         self.model = model
         self.checkpoint_dir = checkpoint_dir
         self.sampler = sampler
-        self.train_loader = self._get_data_loader(training_set,
-                                                  batch_size=batch_size,
-                                                  sampler=sampler)
-        self.validation_loader = self._get_data_loader(validation_set,
-                                                       batch_size=batch_size,
-                                                       shuffle=False)
-        self.test_loader = self._get_data_loader(test_set,
-                                                 batch_size=batch_size,
-                                                 shuffle=False)
+        self.train_loader = self._get_data_loader(
+            training_set,
+            batch_size,
+            sampler=sampler
+        )
+        self.validation_loader = self._get_data_loader(
+            validation_set,
+            batch_size,
+            shuffle=False
+        )
+        self.test_loader = self._get_data_loader(
+            test_set,
+            batch_size,
+            shuffle=False
+        )
         self.optimizer = self._get_optimizer(model, learning_rate)
 
     def _get_optimizer(self, model, lr):
         return Adam(model.parameters(), lr=lr)
 
-    def _get_data_loader(self, dataset, batch_size=1, shuffle=True,
-                         sampler=None):
+    def _get_data_loader(self, dataset, batch_size, shuffle=True, sampler=None):
         if dataset is None:
             return None
         return DataLoader(
