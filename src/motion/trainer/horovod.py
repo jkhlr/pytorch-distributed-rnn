@@ -34,9 +34,6 @@ class HorovodTrainer(DistributedTrainer):
         optimizer = super()._get_optimizer(model, lr)
         return hvd.DistributedOptimizer(optimizer, named_parameters=model.named_parameters())
 
-    def _reset_hidden_state(self):
-        self.model.module.reset_hidden_state()
-
     def train(self, epochs):
         hvd.broadcast_parameters(self.model.state_dict(), root_rank=0)
         return super().train(epochs)

@@ -36,6 +36,8 @@ class Trainer:
             shuffle=False
         )
         self.optimizer = self._get_optimizer(model, learning_rate)
+        self.training_history = []
+        self.validation_history = []
 
     def _get_optimizer(self, model, lr):
         return Adam(model.parameters(), lr=lr)
@@ -54,45 +56,39 @@ class Trainer:
         return TrainingMessageFormatter(epochs)
 
     def train(self, epochs):
-        training_history = []
-        validation_history = []
-        formatter = self._get_formatter(epochs)
-
-        def train_inner():
-            best_loss = None
-
-            for epoch in range(epochs):
-                if self.sampler is not None:
-                    self.sampler.set_epoch(epoch)
-                logging.info(formatter.epoch_start_message(epoch))
-                train_loss, train_acc = self._train_step(formatter)
-                training_history.append(train_loss)
-
-                if self.validation_loader is not None:
-                    validation_loss, val_acc = self._evaluate(
-                        self.validation_loader,
-                        formatter,
-                        epoch
-                    )
-                    validation_history.append(validation_loss)
-
-                    if best_loss is None or best_loss > validation_loss:
-                        logging.info(f"New best model in epoch {epoch + 1}")
-                        best_loss = validation_loss
-                        self._save_checkpoint(epoch, validation_loss, best=True)
-
-                # if epoch % 10 == 0 or epoch == epochs - 1:
-                #     self._save_checkpoint(epoch, train_loss)
-
         start = time.perf_counter()
-        memory = max(memory_usage((train_inner, tuple(), {})))
+        memory = max(memory_usage((self._train, (epochs, ), {})))
         duration = time.perf_counter() - start
+
+        formatter = self._get_formatter(epochs)
         logging.info(formatter.performance_message(memory, duration))
 
         if self.test_loader is not None:
             self._evaluate(self.test_loader, formatter)
 
-        return self.model.eval(), training_history, validation_history
+    def _train(self, epochs):
+        formatter = self._get_formatter(epochs)
+        best_loss = None
+
+        for epoch in range(epochs):
+            if self.sampler is not None:
+                self.sampler.set_epoch(epoch)
+            logging.info(formatter.epoch_start_message(epoch))
+            train_loss, train_acc = self._train_step(formatter)
+            self.training_history.append(train_loss)
+
+            if self.validation_loader is not None:
+                validation_loss, val_acc = self._evaluate(
+                    self.validation_loader,
+                    formatter,
+                    epoch
+                )
+                self.validation_history.append(validation_loss)
+
+                if best_loss is None or best_loss > validation_loss:
+                    logging.info(f"New best model in epoch {epoch + 1}")
+                    best_loss = validation_loss
+                    self._save_checkpoint(epoch, validation_loss, best=True)
 
     def _train_step(self, formatter):
         self.model.train()
@@ -151,9 +147,6 @@ class Trainer:
             )
         )
         return eval_loss, accuracy
-
-    def _reset_hidden_state(self):
-        self.model.reset_hidden_state()
 
     def _save_checkpoint(self, epoch, loss, best=False):
         if self.checkpoint_dir is None:

@@ -6,11 +6,14 @@ from model import MotionModel
 from trainer.base import Trainer
 from trainer.ddp import DDPTrainer
 from trainer.horovod import HorovodTrainer
+from trainer.ray import RayTrainer
+
 
 def add_sub_commands(sub_parser):
     create_parser(sub_parser, 'local', Trainer)
     create_parser(sub_parser, 'distributed', DDPTrainer)
     create_parser(sub_parser, 'horovod', HorovodTrainer)
+    create_parser(sub_parser, 'ray', RayTrainer)
 
 
 def create_parser(sub_parser, name, trainer_class):
@@ -48,8 +51,10 @@ def train(args, trainer):
     trainer = trainer(**trainer_args)
 
     logging.info(f'Training model for {args.epochs} epochs...')
-    _, train_history, validation_history = trainer.train(epochs=args.epochs)
-    history = {'train_history': train_history,
-               'validation_history': validation_history}
+    trainer.train(epochs=args.epochs)
+    history = {
+        'train_history': trainer.training_history,
+        'validation_history': trainer.validation_history
+    }
     with open('history.json', 'w') as file:
         json.dump(history, file)

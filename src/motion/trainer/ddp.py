@@ -31,6 +31,3 @@ class DDPTrainer(DistributedTrainer):
             learning_rate=learning_rate,
             checkpoint_dir=checkpoint_dir
         )
-
-    def _reset_hidden_state(self):
-        self.model.module.reset_hidden_state()
