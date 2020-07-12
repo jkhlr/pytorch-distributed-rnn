@@ -13,7 +13,8 @@ class DDPTrainer(DistributedTrainer):
             learning_rate,
             validation_set=None,
             test_set=None,
-            checkpoint_dir=None
+            checkpoint_dir=None,
+            **kwargs
     ):
         init_process_group('mpi')
         model = DistributedDataParallel(model)

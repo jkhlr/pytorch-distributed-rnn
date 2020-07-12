@@ -1,7 +1,7 @@
 import argparse
 import sys
 from pathlib import Path
-
+import random
 import torch
 
 import param_server
@@ -26,6 +26,7 @@ def main():
     parser.add_argument('--dropout', default=0.3, type=float)
     parser.add_argument('--log', default='INFO')
     parser.add_argument('--num-threads', default=4, type=int)
+    parser.add_argument('--world-size', default=None, type=int)
     parser.add_argument('--seed', default=None, type=int)
 
     sub_parser = parser.add_subparsers(title='Available commands', metavar='command [options ...]')
@@ -37,6 +38,7 @@ def main():
     args = parser.parse_args()
 
     if args.seed is not None:
+        random.seed(args.seed)
         torch.manual_seed(args.seed)
 
     args.func(args)

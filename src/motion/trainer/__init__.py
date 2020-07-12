@@ -46,7 +46,9 @@ def train(args, trainer):
         test_set=test_set,
         batch_size=args.batch_size,
         learning_rate=args.learning_rate,
-        checkpoint_dir=args.checkpoint_directory
+        checkpoint_dir=args.checkpoint_directory,
+        world_size=args.world_size,
+        seed=args.seed,
     )
     trainer = trainer(**trainer_args)
 

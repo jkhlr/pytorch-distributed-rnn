@@ -12,7 +12,8 @@ class HorovodTrainer(DistributedTrainer):
             learning_rate,
             validation_set=None,
             test_set=None,
-            checkpoint_dir=None
+            checkpoint_dir=None,
+            **kwargs
     ):
         hvd.init()
         rank = hvd.rank()
