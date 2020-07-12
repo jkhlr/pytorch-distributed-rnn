@@ -109,6 +109,16 @@ def install_profiler(c):
     c.run(f'{pip_bin} install memory_profiler')
 
 
+@task
+def start_ray(c, master):
+    port = 6379
+    redis_password = 5241590000000000
+    if c.host is master:
+        c.run(f'ray start --head --port={port}')
+    else:
+        c.run(f'ray start --address=\'{master}:{port}\' --redis-password=\'{redis_password}\'')
+
+
 def run_training_configuration(
         connection,
         trainer,
@@ -156,7 +166,6 @@ def run_training_configuration(
             f'{python_bin} {train_script} {parameter_string} horovod'
         )
     elif trainer == 'ray':
-        # TODO add starting and stopping ray on all nodes
         command = (f'{python_bin} {train_script} {parameter_string} '
                    f'--world-size {num_hosts * slots_per_host}'
                    f' ray')
