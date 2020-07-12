@@ -155,6 +155,11 @@ def run_training_configuration(
             f'--hosts {host_string} '
             f'{python_bin} {train_script} {parameter_string} horovod'
         )
+    elif trainer == 'ray':
+        # TODO add starting and stopping ray on all nodes
+        command = (f'{python_bin} {train_script} {parameter_string} '
+                   f'--world-size {num_hosts * slots_per_host}'
+                   f' ray')
     else:
         raise ValueError(f'Invalid trainer: {trainer}')
 
@@ -214,10 +219,10 @@ def run_debug(c):
 
 
 @task
-def run_debug_docker(c):
+def run_debug_docker(c, trainer):
     docker_debug_run = {
-        'trainer': 'distributed',
-        'hosts': 2,
+        'trainer': trainer,
+        'hosts': 3,
         'slots': 1,
         'parameters': {
             '--batch-size': 1440,
