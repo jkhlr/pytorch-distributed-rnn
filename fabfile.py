@@ -19,6 +19,11 @@ HOSTS = [
     '10.42.0.69'
 ]
 
+DOCKER_HOSTS = [
+    'master',
+    'slave'
+]
+
 DEBUG_RUN = {
     'trainer': 'distributed',
     'hosts': 12,
@@ -48,14 +53,15 @@ TRAIN_RUNS = [
         'parameters': {
             # Should be a multiple of 96, to make training on
             # 1, 2, 4, 8, and 12 nodes with 1, 2 and 4 slots reproducible
-            '--batch-size': 1440,
-            '--epochs': 10,
+            '--batch-size': batch_size,
+            '--epochs': 1,
             '--stacked-layer': 2,
             '--hidden-units': 32,
             '--dropout': 0.3,
             '--seed': 123456789
         }
     }
+    for batch_size in [480, 960, 1440]
     for num_slots in [1, 2, 4]
     for num_hosts in [1, 2, 4, 8, 12]
     for trainer in ['local', 'distributed', 'horovod']
@@ -63,20 +69,25 @@ TRAIN_RUNS = [
 ]
 
 
-@task
-def prepare_connections(c):
-    keyscan_command = f'ssh-keyscan {" ".join(HOSTS)}'
+def test_mpi_connection(c, hosts):
+    keyscan_command = f'ssh-keyscan {" ".join(hosts)}'
     known_hosts_file = '~/.ssh/known_hosts'
 
     new_entries = c.run(keyscan_command).stdout
-    existing_entries = c.run(f'cat {known_hosts_file}').stdout
+    existing_entries = c.run(f'cat {known_hosts_file}', warn=True).stdout
     if new_entries not in existing_entries:
         c.run(f'{keyscan_command} >> {known_hosts_file}')
+    c.run(f'mpirun --host {",".join(hosts)} hostname')
 
-    hostnames = c.run(f'mpirun --host {",".join(HOSTS)} hostname').stdout
-    if not all(hostname == result for hostname, result in
-               zip(HOSTS, hostnames.splitlines())):
-        raise ValueError("Can't connect to slaves")
+
+@task
+def prepare_connections(c):
+    test_mpi_connection(c, HOSTS)
+
+
+@task
+def prepare_connections_docker(c):
+    test_mpi_connection(c, DOCKER_HOSTS)
 
 
 @task
@@ -96,8 +107,13 @@ def install_wheels(c):
     dest_path = '/tmp/wheels'
 
     c.run(f'mkdir -p {dest_path}')
-    rsync(c, source_path, dest_path, delete=True,
-          ssh_opts="-i ~/.ssh/pi_cluster -o StrictHostKeyChecking=no")
+    rsync(
+        c,
+        source_path,
+        dest_path,
+        delete=True,
+        ssh_opts="-i ~/.ssh/pi_cluster -o StrictHostKeyChecking=no"
+    )
 
     pip_bin = BIN_DIR / 'pip'
     c.run(f'{pip_bin} install {dest_path}/*.whl')
@@ -141,14 +157,6 @@ def run_training_configuration(
             f'{python_bin} {train_script} {parameter_string} distributed'
         )
     elif trainer == 'horovod':
-        # command = (
-        #     'mpirun --bind-to none --map-by slot '
-        #     '-x NCCL_DEBUG=INFO -x LD_LIBRARY_PATH -x PATH '
-        #     '-mca pml ob1 -mca btl ^openib '
-        #     f'-np {num_hosts * slots_per_host} '
-        #     f'--host {host_string} '
-        #     f'{python_bin} {train_script} {parameter_string} horovod'
-        # )
         command = (
             'horovodrun '
             f'-np {num_hosts * slots_per_host} '
@@ -214,10 +222,10 @@ def run_debug(c):
 
 
 @task
-def run_debug_docker(c):
+def run_debug_docker(c, trainer):
     docker_debug_run = {
-        'trainer': 'distributed',
-        'hosts': 2,
+        'trainer': trainer,
+        'hosts': 1,
         'slots': 1,
         'parameters': {
             '--batch-size': 1440,
@@ -228,10 +236,10 @@ def run_debug_docker(c):
             '--seed': 123456789
         }
     }
-    hosts = ['master', 'slave']
+    hosts = DOCKER_HOSTS
     bin_dir = '/usr/local/bin'
     train_script = f'~/src/{DATASET}/main.py'
-    result_filename = 'results_debug.json'
+    result_filename = 'results_debug_docker.json'
 
     run_training(
         connection=c,

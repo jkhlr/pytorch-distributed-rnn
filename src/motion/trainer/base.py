@@ -6,7 +6,7 @@ from memory_profiler import memory_usage
 from torch import save
 from torch.nn import CrossEntropyLoss
 from torch.optim import Adam
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, DistributedSampler
 
 from trainer.formatter import TrainingMessageFormatter
 
@@ -19,20 +19,24 @@ class Trainer:
                  checkpoint_dir=None, sampler=None):
         self.model = model
         self.checkpoint_dir = checkpoint_dir
-        self.sampler = sampler
+        self.sampler = sampler or DistributedSampler(
+            training_set,
+            num_replicas=1,
+            rank=0
+        )
         self.train_loader = self._get_data_loader(
             training_set,
             batch_size,
-            sampler=sampler
+            sampler=self.sampler
         )
         self.validation_loader = self._get_data_loader(
             validation_set,
-            batch_size,
+            batch_size=None,
             shuffle=False
         )
         self.test_loader = self._get_data_loader(
             test_set,
-            batch_size,
+            batch_size=None,
             shuffle=False
         )
         self.optimizer = self._get_optimizer(model, learning_rate)
@@ -40,9 +44,18 @@ class Trainer:
     def _get_optimizer(self, model, lr):
         return Adam(model.parameters(), lr=lr)
 
-    def _get_data_loader(self, dataset, batch_size, shuffle=True, sampler=None):
+    def _get_data_loader(
+            self,
+            dataset,
+            batch_size=None,
+            shuffle=True,
+            sampler=None
+    ):
         if dataset is None:
             return None
+        if batch_size is None:
+            batch_size = len(dataset)
+
         return DataLoader(
             dataset,
             batch_size=batch_size,
@@ -80,9 +93,6 @@ class Trainer:
                         logging.info(f"New best model in epoch {epoch + 1}")
                         best_loss = validation_loss
                         self._save_checkpoint(epoch, validation_loss, best=True)
-
-                # if epoch % 10 == 0 or epoch == epochs - 1:
-                #     self._save_checkpoint(epoch, train_loss)
 
         start = time.perf_counter()
         memory = max(memory_usage((train_inner, tuple(), {})))

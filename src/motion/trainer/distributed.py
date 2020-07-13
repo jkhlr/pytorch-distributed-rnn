@@ -17,11 +17,6 @@ class DistributedTrainer(Trainer):
             test_set=None,
             checkpoint_dir=None,
     ):
-        sampler = DistributedSampler(
-            training_set,
-            num_replicas=world_size,
-            rank=rank
-        )
         if rank != 0:
             test_set = None
             validation_set = None
@@ -36,14 +31,22 @@ class DistributedTrainer(Trainer):
             test_set=test_set,
             batch_size=batch_size,
             learning_rate=learning_rate,
-            checkpoint_dir=checkpoint_dir,
-            sampler=sampler
+            checkpoint_dir=checkpoint_dir
         )
 
-    def _get_data_loader(self, dataset, batch_size, shuffle=True, sampler=None):
+    def _get_data_loader(
+            self,
+            dataset,
+            batch_size=None,
+            shuffle=True,
+            sampler=None
+    ):
+        if batch_size is not None:
+            batch_size = batch_size // self.world_size
+
         return super()._get_data_loader(
             dataset,
-            batch_size // self.world_size,
+            batch_size=batch_size,
             shuffle=shuffle,
             sampler=sampler
         )
