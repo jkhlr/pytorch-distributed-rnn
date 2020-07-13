@@ -29,11 +29,7 @@ DEBUG_RUN = {
     'hosts': 12,
     'slots': 1,
     'parameters': {
-        '--batch-size': 1440,
         '--epochs': 1,
-        '--stacked-layer': 2,
-        '--hidden-units': 32,
-        '--dropout': 0.3,
         '--seed': 123456789
     }
 }
@@ -51,13 +47,10 @@ TRAIN_RUNS = [
         'hosts': num_hosts,
         'slots': num_slots,
         'parameters': {
-            # Should be a multiple of 96, to make training on
+            # Batch size should be a multiple of 96, to make training on
             # 1, 2, 4, 8, and 12 nodes with 1, 2 and 4 slots reproducible
             '--batch-size': batch_size,
             '--epochs': 1,
-            '--stacked-layer': 2,
-            '--hidden-units': 32,
-            '--dropout': 0.3,
             '--seed': 123456789
         }
     }
