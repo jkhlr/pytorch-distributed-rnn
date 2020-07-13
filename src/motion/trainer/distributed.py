@@ -31,14 +31,18 @@ class DistributedTrainer(Trainer):
             test_set=test_set,
             batch_size=batch_size,
             learning_rate=learning_rate,
-            checkpoint_dir=checkpoint_dir
+            checkpoint_dir=checkpoint_dir,
+            sampler=DistributedSampler(
+                training_set,
+                num_replicas=world_size,
+                rank=rank
+            )
         )
 
     def _get_data_loader(
             self,
             dataset,
             batch_size=None,
-            shuffle=True,
             sampler=None
     ):
         if batch_size is not None:
@@ -47,7 +51,6 @@ class DistributedTrainer(Trainer):
         return super()._get_data_loader(
             dataset,
             batch_size=batch_size,
-            shuffle=shuffle,
             sampler=sampler
         )
 

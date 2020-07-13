@@ -31,13 +31,11 @@ class Trainer:
         )
         self.validation_loader = self._get_data_loader(
             validation_set,
-            batch_size=None,
-            shuffle=False
+            batch_size=None
         )
         self.test_loader = self._get_data_loader(
             test_set,
-            batch_size=None,
-            shuffle=False
+            batch_size=None
         )
         self.optimizer = self._get_optimizer(model, learning_rate)
 
@@ -48,7 +46,6 @@ class Trainer:
             self,
             dataset,
             batch_size=None,
-            shuffle=True,
             sampler=None
     ):
         if dataset is None:
@@ -59,7 +56,6 @@ class Trainer:
         return DataLoader(
             dataset,
             batch_size=batch_size,
-            shuffle=(sampler is None and shuffle),
             sampler=sampler
         )
 

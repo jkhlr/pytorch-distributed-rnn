@@ -218,14 +218,10 @@ def run_debug(c):
 def run_debug_docker(c, trainer):
     docker_debug_run = {
         'trainer': trainer,
-        'hosts': 1,
+        'hosts': 2,
         'slots': 1,
         'parameters': {
-            '--batch-size': 1440,
             '--epochs': 1,
-            '--stacked-layer': 2,
-            '--hidden-units': 32,
-            '--dropout': 0.3,
             '--seed': 123456789
         }
     }
