@@ -26,12 +26,13 @@ DOCKER_HOSTS = [
 ]
 
 DEBUG_RUN = {
-    'trainer': 'distributed',
-    'hosts': 12,
+    'trainer': 'local',
+    'hosts': 1,
     'slots': 1,
     'parameters': {
         '--epochs': 1,
-        '--seed': 123456789
+        '--seed': 123456789,
+        '--no-validation': ''
     }
 }
 
@@ -46,20 +47,20 @@ TRAIN_RUNS = [
     {
         'trainer': trainer,
         'hosts': num_hosts,
-        'slots': num_slots,
+        'slots': 1,
         'parameters': {
             # Batch size should be a multiple of 96, to make training on
             # 1, 2, 4, 8, and 12 nodes with 1, 2 and 4 slots reproducible
             '--batch-size': batch_size,
             '--epochs': 1,
-            '--seed': 123456789
+            '--seed': 123456789,
+            '--no-validation': ''
         }
     }
     for batch_size in [480, 960, 1440]
-    for num_slots in [1, 2, 4]
     for num_hosts in [1, 2, 4, 8, 12]
     for trainer in ['local', 'distributed', 'horovod']
-    if trainer != 'local' or num_hosts == num_slots == 1
+    if trainer != 'local' or num_hosts == 1
 ]
 
 
@@ -119,8 +120,69 @@ def install_profiler(c):
     c.run(f'{pip_bin} install memory_profiler')
 
 
-def run_training_configuration(
-        connection,
+@task
+def run_network_test(c):
+    run_with_tc(c)
+
+
+def run_with_tc(c, hosts=None, result_file=None):
+    hosts = hosts or HOSTS
+    results_file = result_file or RESULT_FILE
+    args = dict(
+        num_hosts=12,
+        slots_per_host=1,
+        parameters={
+            '--batch-size': 1440,
+            '--epochs': 1,
+            '--seed': 123456789,
+            '--no-validation': ''
+        },
+        bin_dir=BIN_DIR,
+        train_script=TRAIN_SCRIPT,
+        hosts=hosts or HOSTS
+    )
+    rules_delay = [
+        ('delay', time, 'ms') for time in [1, 2, 5, 10, 25, 50, 100]
+    ]
+    rules_loss = [
+        ('loss', percent, '%') for percent in [0.1, 0.5, 1, 2, 5, 10, 15]
+    ]
+    rules = rules_delay + rules_loss
+
+    for i, (rule_type, rule_value, rule_unit) in enumerate(rules):
+        rule = f'{rule_type} {rule_value}{rule_unit}'
+        print(f'Setting rule {rule}')
+        set_rule(c, rule, hosts)
+        print(f'Running with rule {i}/{len(rules)}')
+        print(rule)
+        for trainer in ['distributed', 'horovod']:
+            command = get_command(trainer=trainer, **args)
+            print(command)
+            stdout, stderr = run_command(c, command)
+            result = {
+                'trainer': trainer,
+                'rule_type': rule_type,
+                'rule_value': rule_value,
+                'rule': rule,
+                'stdout': stdout,
+                'stderr': stderr,
+                'command': command
+            }
+            with open(results_file, 'r+') as f:
+                results = json.load(f)['results']
+                results.append(result)
+                json.dump({'results': results}, f)
+
+
+def set_rule(c, rule, hosts, delete=False):
+    action = 'delete' if delete else 'add'
+    for host in hosts:
+        c.run(
+            f'ssh pi@{host} "sudo tc qdisk {action} dev eth0 root netem {rule}"'
+        )
+
+
+def get_command(
         trainer,
         parameters,
         num_hosts,
@@ -151,8 +213,9 @@ def run_training_configuration(
             f'{python_bin} {train_script} {parameter_string} distributed'
         )
     elif trainer == 'horovod':
+        horovod_bin = Path(bin_dir) / 'horovodrun'
         command = (
-            'horovodrun '
+            f'{horovod_bin} '
             f'-np {num_hosts * slots_per_host} '
             f'--hosts {host_string} '
             f'{python_bin} {train_script} {parameter_string} horovod'
@@ -160,9 +223,13 @@ def run_training_configuration(
     else:
         raise ValueError(f'Invalid trainer: {trainer}')
 
+    return command
+
+
+def run_command(connection, command):
     print(command)
     result = connection.run(command)
-    return command, result.stdout, result.stderr
+    return result.stdout, result.stderr
 
 
 def run_training(
@@ -181,11 +248,8 @@ def run_training(
     configurations = list(configurations or TRAIN_RUNS)
     shuffle(configurations)
 
-    results = []
     for i, run in enumerate(configurations):
-        print(f'Running configuration {i}/{len(configurations)}')
-        command, stdout, stderr = run_training_configuration(
-            connection=connection,
+        command = get_command(
             trainer=run['trainer'],
             parameters=run['parameters'],
             num_hosts=run['hosts'],
@@ -194,12 +258,25 @@ def run_training(
             bin_dir=bin_dir,
             train_script=train_script
         )
-        results.append({
+        with open(result_filename, 'r') as f:
+            results = json.load(f)['results']
+
+        executed_commands = [result['command'] for result in results]
+        if command in executed_commands:
+            print(f'Skipping configuration {i}/{len(configurations)}')
+            continue
+
+        print(f'Running configuration {i}/{len(configurations)}')
+        stdout, stderr = run_command(connection, command)
+
+        result = {
             'command': command,
             'stdout': stdout,
             'stderr': stderr,
             'config': run
-        })
+        }
+
+        results.append(result)
         with open(result_filename, 'w') as f:
             json.dump({'results': results}, f)
 
@@ -227,7 +304,8 @@ def run_debug_docker(c, trainer):
         'slots': 1,
         'parameters': {
             '--epochs': 1,
-            '--seed': 123456789
+            '--seed': 123456789,
+            '--no-validation': ''
         }
     }
     hosts = DOCKER_HOSTS

@@ -27,6 +27,7 @@ def main():
     parser.add_argument('--log', default='INFO')
     parser.add_argument('--num-threads', default=4, type=int)
     parser.add_argument('--seed', default=None, type=int)
+    parser.add_argument('--no-validation', action='store_true')
 
     sub_parser = parser.add_subparsers(title='Available commands', metavar='command [options ...]')
     sub_parser.required = True

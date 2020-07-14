@@ -25,9 +25,14 @@ def train(args, trainer):
         args.dataset_path,
         output_path=args.output_path
     )
+
     logging.info(f'Training set of size {len(training_set)}')
-    logging.info(f'Validation set of size {len(validation_set)}')
-    logging.info(f'Test set of size {len(test_set)}')
+    if args.no_validation:
+        validation_set = None
+        test_set = None
+    else:
+        logging.info(f'Validation set of size {len(validation_set)}')
+        logging.info(f'Test set of size {len(test_set)}')
 
     model = MotionModel(
         input_dim=training_set.num_features,
