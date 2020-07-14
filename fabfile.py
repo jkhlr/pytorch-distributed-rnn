@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from random import shuffle
 
 from fabric import task
 from patchwork.transfers import rsync
@@ -175,10 +176,14 @@ def run_training(
     hosts = hosts or HOSTS
     bin_dir = bin_dir or BIN_DIR
     train_script = train_script or TRAIN_SCRIPT
-    configurations = configurations or TRAIN_RUNS
     result_filename = result_filename or RESULT_FILE
+
+    configurations = list(configurations or TRAIN_RUNS)
+    shuffle(configurations)
+
     results = []
-    for run in configurations:
+    for i, run in enumerate(configurations):
+        print(f'Running configuration {i}/{len(configurations)}')
         command, stdout, stderr = run_training_configuration(
             connection=connection,
             trainer=run['trainer'],
