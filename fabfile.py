@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 from random import shuffle
 
@@ -42,6 +43,7 @@ SRC_DIR = WORK_DIR / 'src'
 DATASET = 'motion'
 TRAIN_SCRIPT = SRC_DIR / DATASET / 'main.py'
 RESULT_FILE = 'results.json'
+RESULT_FILE_NETWORK = 'results_network.json'
 
 TRAIN_RUNS = [
     {
@@ -127,7 +129,7 @@ def run_network_test(c):
 
 def run_with_tc(c, hosts=None, result_file=None):
     hosts = hosts or HOSTS
-    results_file = result_file or RESULT_FILE
+    results_file = result_file or RESULT_FILE_NETWORK
     args = dict(
         num_hosts=12,
         slots_per_host=1,
@@ -141,16 +143,18 @@ def run_with_tc(c, hosts=None, result_file=None):
         train_script=TRAIN_SCRIPT,
         hosts=hosts or HOSTS
     )
-    rules_delay = [
-        ('delay', time, 'ms') for time in [1, 2, 5, 10, 25, 50, 100]
-    ]
+    # rules_delay = [
+    #     ('delay', time, 'ms') for time in [0, 1, 2, 5, 10, 25, 50, 100, 200, 300, 400]
+    # ]
     rules_loss = [
-        ('loss', percent, '%') for percent in [0.1, 0.5, 1, 2, 5, 10, 15]
+        ('loss', percent, '%') for percent in [15]
     ]
-    rules = rules_delay + rules_loss
+    rules = rules_loss  # + rules_loss
 
     for i, (rule_type, rule_value, rule_unit) in enumerate(rules):
         rule = f'{rule_type} {rule_value}{rule_unit}'
+        # if i == 0:
+        #     set_rule(c, rule, hosts, delete=True)
         print(f'Setting rule {rule}')
         set_rule(c, rule, hosts)
         print(f'Running with rule {i}/{len(rules)}')
@@ -158,7 +162,7 @@ def run_with_tc(c, hosts=None, result_file=None):
         for trainer in ['distributed', 'horovod']:
             command = get_command(trainer=trainer, **args)
             print(command)
-            stdout, stderr = run_command(c, command)
+            stdout, stderr = run_command(c, command, warn=True)
             result = {
                 'trainer': trainer,
                 'rule_type': rule_type,
@@ -168,18 +172,23 @@ def run_with_tc(c, hosts=None, result_file=None):
                 'stderr': stderr,
                 'command': command
             }
-            with open(results_file, 'r+') as f:
-                results = json.load(f)['results']
+            if os.path.exists(results_file):
+                with open(results_file, 'r') as f:
+                    results = json.load(f)['results']
+            else:
+                results = []
+            with open(results_file, 'w') as f:
                 results.append(result)
                 json.dump({'results': results}, f)
+        set_rule(c, rule, hosts, delete=True)
 
 
 def set_rule(c, rule, hosts, delete=False):
     action = 'delete' if delete else 'add'
     for host in hosts:
-        c.run(
-            f'ssh pi@{host} "sudo tc qdisk {action} dev eth0 root netem {rule}"'
-        )
+        command = f'ssh pi@{host} "sudo tc qdisc {action} dev eth0 root netem {rule}"'
+        print(command)
+        c.run(command)
 
 
 def get_command(
@@ -215,7 +224,7 @@ def get_command(
     elif trainer == 'horovod':
         horovod_bin = Path(bin_dir) / 'horovodrun'
         command = (
-            f'{horovod_bin} '
+            f'{horovod_bin} --start-timeout 300 '
             f'-np {num_hosts * slots_per_host} '
             f'--hosts {host_string} '
             f'{python_bin} {train_script} {parameter_string} horovod'
@@ -226,9 +235,9 @@ def get_command(
     return command
 
 
-def run_command(connection, command):
+def run_command(connection, command, warn=False):
     print(command)
-    result = connection.run(command)
+    result = connection.run(command, warn=warn)
     return result.stdout, result.stderr
 
 
