@@ -1,4 +1,4 @@
 torch==1.4.0
 horovod==0.19.5
-numpy==1.18.5
+numpy==1.22.0
 memory_profiler==0.57.0
